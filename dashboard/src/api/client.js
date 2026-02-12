@@ -16,18 +16,18 @@ async function apiFetch(path, params = {}) {
   return res.json();
 }
 
-export async function fetchDatasets() {
-  const { data } = await apiFetch(`${BASE}/datasets`);
+export async function fetchDatasets(category) {
+  const { data } = await apiFetch(`${BASE}/datasets`, { category });
   return data;
 }
 
-export async function fetchDates() {
-  const { data } = await apiFetch(`${BASE}/dates`);
+export async function fetchDates(category) {
+  const { data } = await apiFetch(`${BASE}/dates`, { category });
   return data;
 }
 
-export async function fetchDiffs(datasetId, limit) {
-  const { data } = await apiFetch(`${BASE}/diffs`, { dataset_id: datasetId, limit });
+export async function fetchDiffs(datasetId, limit, category) {
+  const { data } = await apiFetch(`${BASE}/diffs`, { dataset_id: datasetId, limit, category });
   return data;
 }
 
@@ -56,12 +56,12 @@ export async function fetchDiffItemsPage(id, { offset = 0, limit = 100, changeTy
   });
 }
 
-export async function fetchSummary(date) {
-  const result = await apiFetch(`${BASE}/summary`, { date });
+export async function fetchSummary(date, category) {
+  const result = await apiFetch(`${BASE}/summary`, { date, category });
   return result;
 }
 
-export async function fetchTrend(days, datasetId) {
-  const { data } = await apiFetch(`${BASE}/trend`, { days, dataset_id: datasetId });
+export async function fetchTrend(days, datasetId, category) {
+  const { data } = await apiFetch(`${BASE}/trend`, { days, dataset_id: datasetId, category });
   return data;
 }

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS datasets (
   name TEXT UNIQUE NOT NULL,
   endpoint TEXT NOT NULL,
   row_key TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'platform',
   created_at TEXT DEFAULT (datetime('now'))
 );
 

@@ -5,8 +5,15 @@ import { ChangeDistributionChart, TrendChart } from '../components/DiffChart.jsx
 import DatePicker from '../components/DatePicker.jsx';
 import { fetchDates, fetchSummary, fetchTrend, fetchDiffs, fetchDatasets } from '../api/client.js';
 
-export default function Overview() {
+const TITLES = {
+  platform: 'Platform Overview',
+  vulnerability: 'Vulnerability Overview',
+};
+
+export default function Overview({ category }) {
   const navigate = useNavigate();
+  const basePath = category === 'vulnerability' ? '/vulns' : '/platform';
+
   const [dates, setDates] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [summary, setSummary] = useState([]);
@@ -16,19 +23,25 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load initial data
+  // Load initial data (scoped to category)
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
+        setError(null);
         const [dateList, ds] = await Promise.all([
-          fetchDates(),
-          fetchDatasets(),
+          fetchDates(category),
+          fetchDatasets(category),
         ]);
         setDates(dateList);
         setDatasets(ds);
         if (dateList.length > 0) {
           setSelectedDate(dateList[0]);
+        } else {
+          setSelectedDate(null);
+          setSummary([]);
+          setTrend([]);
+          setDiffs([]);
         }
       } catch (err) {
         setError(err.message);
@@ -37,17 +50,17 @@ export default function Overview() {
       }
     }
     load();
-  }, []);
+  }, [category]);
 
-  // Load data for selected date
+  // Load data for selected date (scoped to category)
   useEffect(() => {
     if (!selectedDate) return;
     async function loadDate() {
       try {
         const [summaryResult, trendData, diffList] = await Promise.all([
-          fetchSummary(selectedDate),
-          fetchTrend(30),
-          fetchDiffs(null, 90),
+          fetchSummary(selectedDate, category),
+          fetchTrend(30, null, category),
+          fetchDiffs(null, 90, category),
         ]);
         setSummary(summaryResult.data || []);
         setTrend(trendData);
@@ -57,7 +70,7 @@ export default function Overview() {
       }
     }
     loadDate();
-  }, [selectedDate]);
+  }, [selectedDate, category]);
 
   if (loading) {
     return <div style={{ color: '#8b949e', padding: '2rem' }}>Loading...</div>;
@@ -82,19 +95,12 @@ export default function Overview() {
     );
   }
 
-  // Build recent diffs table grouped by date
-  const diffsByDate = {};
-  for (const d of diffs) {
-    if (!diffsByDate[d.to_date]) diffsByDate[d.to_date] = [];
-    diffsByDate[d.to_date].push(d);
-  }
-
   return (
     <div>
       {/* Header row with date picker */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ color: '#e1e4e8', fontSize: '1.25rem', fontWeight: 600 }}>
-          Overview
+          {TITLES[category] || 'Overview'}
         </h2>
         <DatePicker dates={dates} selected={selectedDate} onChange={setSelectedDate} />
       </div>
@@ -149,7 +155,7 @@ export default function Overview() {
                   <td style={{ ...tdStyle, color: '#8b949e', fontVariantNumeric: 'tabular-nums' }}>{s.unchanged_count}</td>
                   <td style={tdStyle}>
                     <button
-                      onClick={() => navigate(`/diff/${s.diff_id}`)}
+                      onClick={() => navigate(`${basePath}/diff/${s.diff_id}`)}
                       style={viewBtnStyle}
                     >
                       View Details

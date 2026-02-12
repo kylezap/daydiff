@@ -30,15 +30,15 @@ export function getDb() {
   const schema = readFileSync(SCHEMA_PATH, 'utf-8');
   _db.exec(schema);
 
-  // Migration: old_data/new_data → row_data/field_changes
-  // If diff_items still has old_data column, drop and recreate with new schema.
-  // Diff data is regenerable from snapshots, so this is safe.
+  // ── Migrations ─────────────────────────────────────────────────
+
+  // Migration 1: old_data/new_data → row_data/field_changes (slim storage)
   try {
-    const cols = _db.pragma('table_info(diff_items)').map(c => c.name);
-    if (cols.includes('old_data')) {
+    const diffCols = _db.pragma('table_info(diff_items)').map(c => c.name);
+    if (diffCols.includes('old_data')) {
       console.log('[db] Migrating diff_items to slim storage format...');
       _db.exec('DROP TABLE IF EXISTS diff_items');
-      _db.exec('DELETE FROM diffs'); // Clear stale diff summaries too
+      _db.exec('DELETE FROM diffs');
       _db.exec(`
         CREATE TABLE IF NOT EXISTS diff_items (
           id INTEGER PRIMARY KEY,
@@ -53,6 +53,18 @@ export function getDb() {
       `);
       _db.exec('CREATE INDEX IF NOT EXISTS idx_diff_items_type ON diff_items(diff_id, change_type)');
       console.log('[db] Migration complete. Re-run diffs to repopulate.');
+    }
+  } catch {
+    // Table doesn't exist yet — schema.sql will create it
+  }
+
+  // Migration 2: add category column to datasets
+  try {
+    const dsCols = _db.pragma('table_info(datasets)').map(c => c.name);
+    if (!dsCols.includes('category')) {
+      console.log('[db] Adding category column to datasets...');
+      _db.exec("ALTER TABLE datasets ADD COLUMN category TEXT NOT NULL DEFAULT 'platform'");
+      console.log('[db] Category column added.');
     }
   } catch {
     // Table doesn't exist yet — schema.sql will create it
@@ -74,15 +86,18 @@ export function closeDb() {
 /**
  * Ensure a dataset record exists in the DB. Returns the dataset row.
  */
-export function ensureDataset(name, endpoint, rowKey) {
+export function ensureDataset(name, endpoint, rowKey, category = 'platform') {
   const db = getDb();
 
   const upsert = db.prepare(`
-    INSERT INTO datasets (name, endpoint, row_key)
-    VALUES (?, ?, ?)
-    ON CONFLICT(name) DO UPDATE SET endpoint = excluded.endpoint, row_key = excluded.row_key
+    INSERT INTO datasets (name, endpoint, row_key, category)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(name) DO UPDATE SET
+      endpoint = excluded.endpoint,
+      row_key = excluded.row_key,
+      category = excluded.category
   `);
-  upsert.run(name, endpoint, rowKey);
+  upsert.run(name, endpoint, rowKey, category);
 
   return db.prepare('SELECT * FROM datasets WHERE name = ?').get(name);
 }

@@ -1,136 +1,66 @@
 /**
- * DevGrid API Dataset Definitions
+ * Dataset Definitions
  *
- * Each entry describes a dataset to fetch daily from the DevGrid API.
- * The fetcher auto-paginates responses that follow the DevGrid pattern:
- *   { data: [...], pagination: { page, limit, total, totalPages } }
+ * Two categories of datasets:
  *
- * Fields:
- *   name       — Unique human-readable name (used in DB + dashboard)
- *   endpoint   — API path appended to API_BASE_URL
- *   rowKey     — Field in each row used as its unique identifier
- *   paginated  — Whether the endpoint returns paginated results (default: true)
- *   params     — Optional default query parameters
- *   headers    — Optional extra headers for this endpoint
- *   transform  — Optional function to normalize the response into a row array.
+ *   platform      — Core DevGrid resources (applications, components, repositories).
+ *                   Tracked as-is for daily change monitoring.
+ *
+ *   vulnerability  — Vulnerabilities scoped per tracked asset from config/assets.mjs.
+ *                   Each asset becomes its own dataset fetching
+ *                   GET /vulnerabilities?vulnerableId=<uuid>.
+ *
+ * To add a new tracked application, edit config/assets.mjs — not this file.
  */
 
-const datasets = [
-  // ──────────────────────────────────────────────────────────────
-  // Active — verified working with current API key
-  // ──────────────────────────────────────────────────────────────
+import assets from './assets.mjs';
+
+// ─── Platform datasets ──────────────────────────────────────────
+
+const platformDatasets = [
   {
     name: 'applications',
     endpoint: '/applications',
     rowKey: 'id',
     paginated: true,
+    category: 'platform',
+  },
+  {
+    name: 'components',
+    endpoint: '/components',
+    rowKey: 'id',
+    paginated: true,
+    category: 'platform',
   },
   {
     name: 'repositories',
     endpoint: '/repositories',
     rowKey: 'id',
     paginated: true,
+    category: 'platform',
   },
-  {
-    name: 'entities',
-    endpoint: '/entities',
-    rowKey: 'id',
-    paginated: true,
-  },
-  {
-    name: 'blueprints',
-    endpoint: '/blueprints',
-    rowKey: 'id',
-    paginated: true,
-  },
-
-  // ──────────────────────────────────────────────────────────────
-  // Disabled — uncomment as access is granted or issues resolved
-  // ──────────────────────────────────────────────────────────────
-
-  // Returns non-JSON (plain text error) — may need different endpoint or params
-  // {
-  //   name: 'components',
-  //   endpoint: '/components',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-
-  // Returns non-JSON (plain text error)
-  // {
-  //   name: 'committers',
-  //   endpoint: '/committers',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-
-  // 500 Internal Server Error
-  // {
-  //   name: 'relationships',
-  //   endpoint: '/relationships',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-
-  // 403 Forbidden — API key lacks permission
-  // {
-  //   name: 'entity-mappings',
-  //   endpoint: '/entity-mappings',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-  // {
-  //   name: 'incidents',
-  //   endpoint: '/incidents',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-  // {
-  //   name: 'resources',
-  //   endpoint: '/resources',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-
-  // 400 Bad Request — likely requires specific query params
-  // {
-  //   name: 'vulnerabilities',
-  //   endpoint: '/vulnerabilities',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-  // {
-  //   name: 'vulnerability-projects',
-  //   endpoint: '/vulnerability-projects',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-
-  // Returns HTML — endpoint may not be available
-  // {
-  //   name: 'vulnerability-identifiers',
-  //   endpoint: '/vulnerability-identifiers',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-  // {
-  //   name: 'api-catalog-apis',
-  //   endpoint: '/api-catalog/apis',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-  // {
-  //   name: 'api-catalog-policies',
-  //   endpoint: '/api-catalog/policies',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
-  // {
-  //   name: 'api-catalog-compliance-reports',
-  //   endpoint: '/api-catalog/compliance-reports',
-  //   rowKey: 'id',
-  //   paginated: true,
-  // },
 ];
+
+// ─── Vulnerability datasets (one per tracked asset) ─────────────
+
+/**
+ * Page size for vulnerability fetches.
+ * The DevGrid default is 10, which is very slow for 1k+ records.
+ * 100 cuts API calls by 10x while staying within typical API limits.
+ */
+const VULN_PAGE_SIZE = 100;
+
+const vulnerabilityDatasets = assets.map(({ name, vulnerableId }) => ({
+  name: `vulns-${name}`,
+  endpoint: '/vulnerabilities',
+  rowKey: 'id',
+  paginated: true,
+  params: { vulnerableId, limit: VULN_PAGE_SIZE },
+  category: 'vulnerability',
+}));
+
+// ─── Combined export ────────────────────────────────────────────
+
+const datasets = [...platformDatasets, ...vulnerabilityDatasets];
 
 export default datasets;

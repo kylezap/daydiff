@@ -17,7 +17,8 @@ export function setupRoutes(app) {
   // ─── GET /api/datasets ──────────────────────────────────────────
   app.get('/api/datasets', (req, res) => {
     try {
-      const datasets = listDatasets();
+      const { category } = req.query;
+      const datasets = listDatasets(category || null);
       res.json({ data: datasets });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -27,7 +28,8 @@ export function setupRoutes(app) {
   // ─── GET /api/dates ─────────────────────────────────────────────
   app.get('/api/dates', (req, res) => {
     try {
-      const dates = getAvailableDates();
+      const { category } = req.query;
+      const dates = getAvailableDates(category || null);
       res.json({ data: dates });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -37,10 +39,11 @@ export function setupRoutes(app) {
   // ─── GET /api/diffs ─────────────────────────────────────────────
   app.get('/api/diffs', (req, res) => {
     try {
-      const { dataset_id, limit } = req.query;
+      const { dataset_id, limit, category } = req.query;
       const diffs = listDiffs(
         dataset_id ? parseInt(dataset_id, 10) : null,
-        limit ? parseInt(limit, 10) : 90
+        limit ? parseInt(limit, 10) : 90,
+        category || null
       );
       res.json({ data: diffs });
     } catch (err) {
@@ -137,17 +140,18 @@ export function setupRoutes(app) {
   // ─── GET /api/summary ──────────────────────────────────────────
   app.get('/api/summary', (req, res) => {
     try {
-      const { date } = req.query;
+      const { date, category } = req.query;
+      const cat = category || null;
       if (!date) {
-        // Default to most recent date
-        const dates = getAvailableDates();
+        // Default to most recent date (within category)
+        const dates = getAvailableDates(cat);
         if (dates.length === 0) {
           return res.json({ data: [], date: null });
         }
-        const summary = getSummaryForDate(dates[0]);
+        const summary = getSummaryForDate(dates[0], cat);
         return res.json({ data: summary, date: dates[0] });
       }
-      const summary = getSummaryForDate(date);
+      const summary = getSummaryForDate(date, cat);
       res.json({ data: summary, date });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -157,10 +161,11 @@ export function setupRoutes(app) {
   // ─── GET /api/trend ─────────────────────────────────────────────
   app.get('/api/trend', (req, res) => {
     try {
-      const { days, dataset_id } = req.query;
+      const { days, dataset_id, category } = req.query;
       const trend = getTrend(
         days ? parseInt(days, 10) : 30,
-        dataset_id ? parseInt(dataset_id, 10) : null
+        dataset_id ? parseInt(dataset_id, 10) : null,
+        category || null
       );
       res.json({ data: trend.reverse() }); // chronological order
     } catch (err) {

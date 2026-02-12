@@ -143,34 +143,43 @@ export function insertDiff(datasetId, fromDate, toDate, summary, items) {
 // ─── Dashboard API Queries ───────────────────────────────────────
 
 /**
- * List all datasets.
+ * List all datasets, optionally filtered by category.
  */
-export function listDatasets() {
-  return getDb().prepare('SELECT * FROM datasets ORDER BY name').all();
+export function listDatasets(category = null) {
+  const db = getDb();
+  if (category) {
+    return db.prepare('SELECT * FROM datasets WHERE category = ? ORDER BY name').all(category);
+  }
+  return db.prepare('SELECT * FROM datasets ORDER BY name').all();
 }
 
 /**
- * List all diffs, optionally filtered by dataset.
+ * List all diffs, optionally filtered by dataset and/or category.
  */
-export function listDiffs(datasetId = null, limit = 90) {
+export function listDiffs(datasetId = null, limit = 90, category = null) {
   const db = getDb();
+  const conditions = [];
+  const params = [];
+
   if (datasetId) {
-    return db.prepare(`
-      SELECT d.*, ds.name as dataset_name
-      FROM diffs d
-      JOIN datasets ds ON ds.id = d.dataset_id
-      WHERE d.dataset_id = ?
-      ORDER BY d.to_date DESC
-      LIMIT ?
-    `).all(datasetId, limit);
+    conditions.push('d.dataset_id = ?');
+    params.push(datasetId);
   }
+  if (category) {
+    conditions.push('ds.category = ?');
+    params.push(category);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
   return db.prepare(`
     SELECT d.*, ds.name as dataset_name
     FROM diffs d
     JOIN datasets ds ON ds.id = d.dataset_id
+    ${where}
     ORDER BY d.to_date DESC
     LIMIT ?
-  `).all(limit);
+  `).all(...params, limit);
 }
 
 /**
@@ -263,10 +272,28 @@ export function getDiffItemsPaginated(diffId, opts = {}) {
 }
 
 /**
- * Get aggregate summary across all datasets for a given date.
+ * Get aggregate summary across datasets for a given date, optionally filtered by category.
  */
-export function getSummaryForDate(date) {
-  return getDb().prepare(`
+export function getSummaryForDate(date, category = null) {
+  const db = getDb();
+  if (category) {
+    return db.prepare(`
+      SELECT
+        ds.name as dataset_name,
+        d.added_count,
+        d.removed_count,
+        d.modified_count,
+        d.unchanged_count,
+        d.from_date,
+        d.to_date,
+        d.id as diff_id
+      FROM diffs d
+      JOIN datasets ds ON ds.id = d.dataset_id
+      WHERE d.to_date = ? AND ds.category = ?
+      ORDER BY ds.name
+    `).all(date, category);
+  }
+  return db.prepare(`
     SELECT
       ds.name as dataset_name,
       d.added_count,
@@ -285,9 +312,11 @@ export function getSummaryForDate(date) {
 
 /**
  * Get trend data: daily diff summaries for the last N days.
+ * Optionally filtered by datasetId and/or category.
  */
-export function getTrend(days = 30, datasetId = null) {
+export function getTrend(days = 30, datasetId = null, category = null) {
   const db = getDb();
+
   if (datasetId) {
     return db.prepare(`
       SELECT to_date, added_count, removed_count, modified_count, unchanged_count
@@ -297,6 +326,23 @@ export function getTrend(days = 30, datasetId = null) {
       LIMIT ?
     `).all(datasetId, days);
   }
+
+  if (category) {
+    return db.prepare(`
+      SELECT d.to_date,
+        SUM(d.added_count) as added_count,
+        SUM(d.removed_count) as removed_count,
+        SUM(d.modified_count) as modified_count,
+        SUM(d.unchanged_count) as unchanged_count
+      FROM diffs d
+      JOIN datasets ds ON ds.id = d.dataset_id
+      WHERE ds.category = ?
+      GROUP BY d.to_date
+      ORDER BY d.to_date DESC
+      LIMIT ?
+    `).all(category, days);
+  }
+
   return db.prepare(`
     SELECT to_date,
       SUM(added_count) as added_count,
@@ -311,10 +357,20 @@ export function getTrend(days = 30, datasetId = null) {
 }
 
 /**
- * Get all available diff dates.
+ * Get all available diff dates, optionally filtered by category.
  */
-export function getAvailableDates() {
-  return getDb().prepare(
+export function getAvailableDates(category = null) {
+  const db = getDb();
+  if (category) {
+    return db.prepare(`
+      SELECT DISTINCT d.to_date
+      FROM diffs d
+      JOIN datasets ds ON ds.id = d.dataset_id
+      WHERE ds.category = ?
+      ORDER BY d.to_date DESC
+    `).all(category).map(r => r.to_date);
+  }
+  return db.prepare(
     'SELECT DISTINCT to_date FROM diffs ORDER BY to_date DESC'
   ).all().map(r => r.to_date);
 }

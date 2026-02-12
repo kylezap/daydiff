@@ -153,6 +153,7 @@ async function fetchDataset(datasetConfig, date) {
     headers = {},
     transform = null,
     paginated = true,
+    category = 'platform',
   } = datasetConfig;
 
   console.log(`[fetch] Fetching dataset: ${name} from ${endpoint}`);
@@ -193,7 +194,7 @@ async function fetchDataset(datasetConfig, date) {
   }
 
   // Ensure dataset record exists in DB
-  const dataset = ensureDataset(name, endpoint, rowKey);
+  const dataset = ensureDataset(name, endpoint, rowKey, category);
 
   // Store snapshot
   const result = insertSnapshot(dataset.id, date, normalizedRows);

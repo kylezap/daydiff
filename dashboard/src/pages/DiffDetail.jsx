@@ -7,7 +7,12 @@ import {
   fetchDates, fetchDiffs, fetchDiff, fetchDatasets,
 } from '../api/client.js';
 
-export default function DiffDetail() {
+const TITLES = {
+  platform: 'Platform Diff Detail',
+  vulnerability: 'Vulnerability Diff Detail',
+};
+
+export default function DiffDetail({ category, basePath = '/platform' }) {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -23,13 +28,13 @@ export default function DiffDetail() {
   const [loading, setLoading] = useState(true);
   const [gridTotal, setGridTotal] = useState(0);
 
-  // Load initial data
+  // Load initial data (scoped to category)
   useEffect(() => {
     async function load() {
       try {
         const [dateList, dsList] = await Promise.all([
-          fetchDates(),
-          fetchDatasets(),
+          fetchDates(category),
+          fetchDatasets(category),
         ]);
         setDates(dateList);
         setDatasets(dsList);
@@ -43,7 +48,7 @@ export default function DiffDetail() {
       }
     }
     load();
-  }, [id]);
+  }, [id, category]);
 
   // If navigated with an ID, load that diff directly
   useEffect(() => {
@@ -61,12 +66,12 @@ export default function DiffDetail() {
     loadDiff();
   }, [id]);
 
-  // Load diffs list when date or dataset changes
+  // Load diffs list when date or dataset changes (scoped to category)
   useEffect(() => {
     if (!selectedDate) return;
     async function loadDiffs() {
       try {
-        const allDiffs = await fetchDiffs(selectedDataset, 90);
+        const allDiffs = await fetchDiffs(selectedDataset, 90, category);
         const filtered = allDiffs.filter(d => d.to_date === selectedDate);
         setDiffs(filtered);
 
@@ -82,7 +87,7 @@ export default function DiffDetail() {
       }
     }
     loadDiffs();
-  }, [selectedDate, selectedDataset]);
+  }, [selectedDate, selectedDataset, category]);
 
   // Load diff metadata when selected diff changes
   useEffect(() => {
@@ -101,13 +106,13 @@ export default function DiffDetail() {
   const handleDateChange = useCallback((date) => {
     setSelectedDate(date);
     setSelectedDiffId(null);
-    navigate('/diff', { replace: true });
-  }, [navigate]);
+    navigate(`${basePath}/diff`, { replace: true });
+  }, [navigate, basePath]);
 
   const handleDiffSelect = useCallback((diffId) => {
     setSelectedDiffId(diffId);
-    navigate(`/diff/${diffId}`, { replace: true });
-  }, [navigate]);
+    navigate(`${basePath}/diff/${diffId}`, { replace: true });
+  }, [navigate, basePath]);
 
   // Stable callback for grid total updates
   const handleTotalChange = useCallback((total) => {
@@ -132,7 +137,7 @@ export default function DiffDetail() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
         <h2 style={{ color: '#e1e4e8', fontSize: '1.25rem', fontWeight: 600 }}>
-          Diff Detail
+          {TITLES[category] || 'Diff Detail'}
           {diff && (
             <span style={{ color: '#8b949e', fontWeight: 400, fontSize: '0.9rem', marginLeft: '0.75rem' }}>
               {diff.dataset_name} &mdash; {diff.from_date} &rarr; {diff.to_date}
