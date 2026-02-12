@@ -1,0 +1,384 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: DevGrid API
+  license:
+    name: Proprietary
+    url: https://devgrid.io
+servers:
+  - url: 'https://prod.api.devgrid.io'
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  # Blueprints
+  /blueprints:
+    $ref: './routes/blueprints.yml#/paths/~1blueprints'
+  /blueprints/{id}:
+    $ref: './routes/blueprints.yml#/paths/~1blueprints~1{id}'
+
+  # Commits
+  /commits:
+    $ref: './routes/commits.yml#/paths/~1commits'
+  /commits/{id}:
+    $ref: './routes/commits.yml#/paths/~1commits~1{id}'
+
+  # Entities
+  /entities:
+    $ref: './routes/entities.yml#/paths/~1entities'
+
+  # Entity Mappings
+  /entity-mappings:
+    $ref: './routes/mappings.yml#/paths/~1mappings'
+  /entity-mappings/{id}:
+    $ref: './routes/mappings.yml#/paths/~1mappings~1{id}'
+
+  # Events
+  /events:
+    $ref: './routes/events.yml#/paths/~1events'
+  /events/{id}:
+    $ref: './routes/events.yml#/paths/~1events~1{id}'
+
+  # Components
+  /components:
+    $ref: './routes/components.yml#/paths/~1components'
+  /components/{id}:
+    $ref: './routes/components.yml#/paths/~1components~1{id}'
+  /components/{id}/dependencies:
+    $ref: './routes/components.yml#/paths/~1components~1{id}~1dependencies'
+
+  # Metrics
+  /metrics:
+    $ref: './routes/metrics.yml#/paths/~1metrics'
+  /metrics/{metricId}/current:
+    $ref: './routes/metrics.yml#/paths/~1metrics~1{metricId}~1current'
+  /metrics/{metricId}/daily:
+    $ref: './routes/metrics.yml#/paths/~1metrics~1{metricId}~1daily'
+  /metrics/facts:
+    $ref: './routes/metrics.yml#/paths/~1metrics~1facts'
+  /metrics/series:
+    $ref: './routes/metrics.yml#/paths/~1metrics~1series'
+
+  # Incidents
+  /incidents:
+    $ref: './routes/incidents.yml#/paths/~1incidents'
+  /incidents/count:
+    $ref: './routes/incidents.yml#/paths/~1incidents~1count'
+  /incidents/{id}:
+    $ref: './routes/incidents.yml#/paths/~1incidents~1{id}'
+
+  # Vulnerabilities
+  /vulnerabilities:
+    $ref: './routes/vulnerabilities.yml#/paths/~1vulnerabilities'
+  /vulnerabilities/bulk:
+    $ref: './routes/vulnerabilities.yml#/paths/~1vulnerabilities~1bulk'
+  /vulnerabilities/{id}:
+    $ref: './routes/vulnerabilities.yml#/paths/~1vulnerabilities~1{id}'
+
+  # Vulnerability Projects
+  /vulnerability-projects:
+    $ref: './routes/vulnerability-projects.yml#/paths/~1vulnerability-projects'
+  /vulnerability-projects/{id}:
+    $ref: './routes/vulnerability-projects.yml#/paths/~1vulnerability-projects~1{id}'
+
+  # Vulnerability Identifiers
+  /vulnerability-identifiers:
+    $ref: './routes/vulnerability-identifiers.yml#/paths/~1vulnerability-identifiers'
+  /vulnerability-identifiers/{id}:
+    $ref: './routes/vulnerability-identifiers.yml#/paths/~1vulnerability-identifiers~1{id}'
+
+  # Repos
+  /repositories:
+    $ref: './routes/repositories.yml#/paths/~1repositories'
+  /repositories/{id}:
+    $ref: './routes/repositories.yml#/paths/~1repositories~1{id}'
+  /repositories/{id}/components:
+    $ref: './routes/repositories.yml#/paths/~1repositories~1{id}~1components'
+  /repositories/{id}/pull-requests:
+    $ref: './routes/repositories.yml#/paths/~1repositories~1{id}~1pull-requests'
+  /repositories/{id}/pull-requests/metrics:
+    $ref: './routes/repositories.yml#/paths/~1repositories~1{id}~1pull-requests~1metrics'
+
+  # Committers
+  /committers:
+    $ref: './routes/committers.yml#/paths/~1committers'
+  /committers/{id}:
+    $ref: './routes/committers.yml#/paths/~1committers~1{id}'
+
+  # Pull Requests
+  /pull-requests:
+    $ref: './routes/pull-requests.yml#/paths/~1pull-requests'
+  /pull-requests/system/{system}/{systemId}:
+    $ref: './routes/pull-requests.yml#/paths/~1pull-requests~1system~1{system}~1{systemId}'
+  /pull-requests/{id}:
+    $ref: './routes/pull-requests.yml#/paths/~1pull-requests~1{id}'
+  /pull-requests/{id}/reviewers:
+    $ref: './routes/pull-requests.yml#/paths/~1pull-requests~1{id}~1reviewers'
+  /pull-requests/{id}/comments:
+    $ref: './routes/pull-requests.yml#/paths/~1pull-requests~1{id}~1comments'
+  /pull-requests/{id}/labels:
+    $ref: './routes/pull-requests.yml#/paths/~1pull-requests~1{id}~1labels'
+  /pull-requests/{id}/files:
+    $ref: './routes/pull-requests.yml#/paths/~1pull-requests~1{id}~1files'
+
+  # Applications
+  /applications:
+    $ref: './routes/applications.yml#/paths/~1applications'
+  /applications/{id}:
+    $ref: './routes/applications.yml#/paths/~1applications~1{id}'
+
+  # Relationships
+  /relationships:
+    $ref: './routes/relationships.yml#/paths/~1relationships'
+  /relationships/{id}:
+    $ref: './routes/relationships.yml#/paths/~1relationships~1{id}'
+
+  # API Catalog
+  /api-catalog/apis:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1apis'
+  /api-catalog/apis/{id}:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1apis~1{id}'
+  /api-catalog/apis/{id}/validate:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1apis~1{id}~1validate'
+
+  # API Catalog Policies
+  /api-catalog/policies:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1policies'
+  /api-catalog/policies/{id}:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1policies~1{id}'
+
+  # API Catalog Rules
+  /api-catalog/rules:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1rules'
+  /api-catalog/rules/{id}:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1rules~1{id}'
+
+  # API Catalog Compliance Reports
+  /api-catalog/compliance-reports:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1compliance-reports'
+  /api-catalog/compliance-reports/{id}:
+    $ref: './routes/api-catalog.yml#/paths/~1api-catalog~1compliance-reports~1{id}'
+
+  # Users
+  /users/process-login:
+    $ref: './routes/users.yml#/paths/~1users~1process-login'
+
+  # Notifications
+  /notifications:
+    $ref: './routes/notifications.yml#/paths/~1notifications'
+  /notifications/{id}:
+    $ref: './routes/notifications.yml#/paths/~1notifications~1{id}'
+  /notifications/{id}/read:
+    $ref: './routes/notifications.yml#/paths/~1notifications~1{id}~1read'
+
+  # Webhooks
+  /webhooks/github:
+    $ref: './routes/webhooks.yml#/paths/~1webhooks~1github'
+
+  # Files
+  /files:
+    $ref: './routes/files.yml#/paths/~1files'
+  /files/{id}:
+    $ref: './routes/files.yml#/paths/~1files~1{id}'
+
+  # Resources
+  /resources:
+    $ref: './routes/resources.yml#/paths/~1resources'
+  /resources/count:
+    $ref: './routes/resources.yml#/paths/~1resources~1count'
+  /resources/{id}:
+    $ref: './routes/resources.yml#/paths/~1resources~1{id}'
+
+components:
+  schemas:
+    # Common Schemas
+    Error:
+      $ref: './schemas/schemas.yml#/components/schemas/Error'
+    ErrorResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/ErrorResponse'
+    ErrorDetail:
+      $ref: './schemas/schemas.yml#/components/schemas/ErrorDetail'
+    ValidationError:
+      $ref: './schemas/schemas.yml#/components/schemas/ValidationError'
+    PaginationResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginationResponse'
+    ApiResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/ApiResponse'
+
+    # User Schemas
+    User:
+      $ref: './schemas/schemas.yml#/components/schemas/User'
+    CreateUser:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateUser'
+    UserList:
+      $ref: './schemas/schemas.yml#/components/schemas/UserList'
+    PaginatedUserResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedUserResponse'
+
+    # Notification Schemas
+    Notification:
+      $ref: './schemas/schemas.yml#/components/schemas/Notification'
+    CreateNotification:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateNotification'
+    NotificationList:
+      $ref: './schemas/schemas.yml#/components/schemas/NotificationList'
+    PaginatedNotificationResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedNotificationResponse'
+
+    # API Catalog Schemas
+    Api:
+      $ref: './schemas/schemas.yml#/components/schemas/Api'
+    CreateApi:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateApi'
+    ApiList:
+      $ref: './schemas/schemas.yml#/components/schemas/ApiList'
+    PaginatedApiResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedApiResponse'
+    ApiDeleteResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/ApiDeleteResponse'
+
+    Policy:
+      $ref: './schemas/schemas.yml#/components/schemas/Policy'
+    CreatePolicy:
+      $ref: './schemas/schemas.yml#/components/schemas/CreatePolicy'
+    PolicyList:
+      $ref: './schemas/schemas.yml#/components/schemas/PolicyList'
+    PaginatedPolicyResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedPolicyResponse'
+
+    Rule:
+      $ref: './schemas/schemas.yml#/components/schemas/Rule'
+    CreateRule:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateRule'
+    RuleList:
+      $ref: './schemas/schemas.yml#/components/schemas/RuleList'
+    PaginatedRuleResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedRuleResponse'
+
+    ComplianceReport:
+      $ref: './schemas/schemas.yml#/components/schemas/ComplianceReport'
+    ComplianceReportList:
+      $ref: './schemas/schemas.yml#/components/schemas/ComplianceReportList'
+    PaginatedComplianceReportResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedComplianceReportResponse'
+
+    # Vulnerability Schemas
+    Vulnerability:
+      $ref: './schemas/schemas.yml#/components/schemas/Vulnerability'
+    CreateVulnerability:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateVulnerability'
+    VulnerabilityList:
+      $ref: './schemas/schemas.yml#/components/schemas/VulnerabilityList'
+    PaginatedVulnerabilityResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedVulnerabilityResponse'
+
+    VulnerabilityIdentifier:
+      $ref: './schemas/schemas.yml#/components/schemas/VulnerabilityIdentifier'
+    CreateVulnerabilityIdentifier:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateVulnerabilityIdentifier'
+    VulnerabilityIdentifierList:
+      $ref: './schemas/schemas.yml#/components/schemas/VulnerabilityIdentifierList'
+    PaginatedVulnerabilityIdentifierResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedVulnerabilityIdentifierResponse'
+
+    # Infrastructure Schemas
+    Blueprint:
+      $ref: './schemas/schemas.yml#/components/schemas/Blueprint'
+    CreateBlueprint:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateBlueprint'
+    BlueprintList:
+      $ref: './schemas/schemas.yml#/components/schemas/BlueprintList'
+    PaginatedBlueprintResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedBlueprintResponse'
+    BlueprintSchema:
+      $ref: './schemas/schemas.yml#/components/schemas/BlueprintSchema'
+    PossibleValue:
+      $ref: './schemas/schemas.yml#/components/schemas/PossibleValue'
+
+    Commit:
+      $ref: './schemas/schemas.yml#/components/schemas/Commit'
+    CreateCommit:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateCommit'
+    CommitList:
+      $ref: './schemas/schemas.yml#/components/schemas/CommitList'
+    PaginatedCommitResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedCommitResponse'
+
+    Committer:
+      $ref: './schemas/schemas.yml#/components/schemas/Committer'
+    CreateCommitter:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateCommitter'
+    CommitterList:
+      $ref: './schemas/schemas.yml#/components/schemas/CommitterList'
+    PaginatedCommitterResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedCommitterResponse'
+
+    Repository:
+      $ref: './schemas/schemas.yml#/components/schemas/Repository'
+    CreateRepository:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateRepository'
+    RepositoryList:
+      $ref: './schemas/schemas.yml#/components/schemas/RepositoryList'
+    PaginatedRepositoryResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedRepositoryResponse'
+
+    Application:
+      $ref: './schemas/schemas.yml#/components/schemas/Application'
+    CreateApplication:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateApplication'
+    ApplicationList:
+      $ref: './schemas/schemas.yml#/components/schemas/ApplicationList'
+    PaginatedApplicationResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedApplicationResponse'
+
+    # Core Entity Schemas
+    Entity:
+      $ref: './schemas/schemas.yml#/components/schemas/Entity'
+    EntityList:
+      $ref: './schemas/schemas.yml#/components/schemas/EntityList'
+
+    Component:
+      $ref: './schemas/schemas.yml#/components/schemas/Component'
+    ComponentList:
+      $ref: './schemas/schemas.yml#/components/schemas/ComponentList'
+
+    # RBAC Schemas
+    Role:
+      $ref: './schemas/schemas.yml#/components/schemas/Role'
+    Permission:
+      $ref: './schemas/schemas.yml#/components/schemas/Permission'
+
+    # Relationship Schemas
+    Relationship:
+      $ref: './schemas/schemas.yml#/components/schemas/Relationship'
+    CreateRelationship:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateRelationship'
+    RelationshipList:
+      $ref: './schemas/schemas.yml#/components/schemas/RelationshipList'
+    PaginatedRelationshipResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedRelationshipResponse'
+
+    # Event Schemas
+    Event:
+      $ref: './schemas/schemas.yml#/components/schemas/Event'
+    CreateEvent:
+      $ref: './schemas/schemas.yml#/components/schemas/CreateEvent'
+    EventList:
+      $ref: './schemas/schemas.yml#/components/schemas/EventList'
+    EventResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/EventResponse'
+    PaginatedEventResponse:
+      $ref: './schemas/schemas.yml#/components/schemas/PaginatedEventResponse'
+
+    # Utility Schemas
+    Attribute:
+      $ref: './schemas/schemas.yml#/components/schemas/Attribute'
+    SchemaItem:
+      $ref: './schemas/schemas.yml#/components/schemas/SchemaItem'
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

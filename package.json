@@ -1,0 +1,28 @@
+{
+  "name": "daydiff",
+  "version": "1.0.0",
+  "description": "Daily data diff reporter - fetches datasets, stores snapshots, computes diffs, and serves a dashboard",
+  "type": "module",
+  "bin": {
+    "daydiff": "./src/cli.mjs"
+  },
+  "scripts": {
+    "start": "node src/cli.mjs run",
+    "fetch": "node src/cli.mjs fetch",
+    "diff": "node src/cli.mjs diff",
+    "dashboard": "node src/cli.mjs dashboard",
+    "status": "node src/cli.mjs status",
+    "build:dashboard": "npm run build --prefix dashboard"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "commander": "^14.0.3",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "undici": "^7.21.0"
+  }
+}
