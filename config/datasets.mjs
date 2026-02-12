@@ -13,20 +13,12 @@
  *   params     — Optional default query parameters
  *   headers    — Optional extra headers for this endpoint
  *   transform  — Optional function to normalize the response into a row array.
- *                Receives the parsed JSON body, must return an array of objects.
- *                Default: assumes { data: [...] } shape.
  */
 
 const datasets = [
   // ──────────────────────────────────────────────────────────────
-  // Core inventory datasets — track your catalog day over day
+  // Active — verified working with current API key
   // ──────────────────────────────────────────────────────────────
-  {
-    name: 'components',
-    endpoint: '/components',
-    rowKey: 'id',
-    paginated: true,
-  },
   {
     name: 'applications',
     endpoint: '/applications',
@@ -46,107 +38,96 @@ const datasets = [
     paginated: true,
   },
   {
-    name: 'relationships',
-    endpoint: '/relationships',
-    rowKey: 'id',
-    paginated: true,
-  },
-  {
-    name: 'entity-mappings',
-    endpoint: '/entity-mappings',
-    rowKey: 'id',
-    paginated: true,
-  },
-
-  // ──────────────────────────────────────────────────────────────
-  // Security & compliance — critical for regulated environments
-  // ──────────────────────────────────────────────────────────────
-  {
-    name: 'vulnerabilities',
-    endpoint: '/vulnerabilities',
-    rowKey: 'id',
-    paginated: true,
-  },
-  {
-    name: 'vulnerability-projects',
-    endpoint: '/vulnerability-projects',
-    rowKey: 'id',
-    paginated: true,
-  },
-  {
-    name: 'vulnerability-identifiers',
-    endpoint: '/vulnerability-identifiers',
-    rowKey: 'id',
-    paginated: true,
-  },
-  {
-    name: 'incidents',
-    endpoint: '/incidents',
-    rowKey: 'id',
-    paginated: true,
-  },
-
-  // ──────────────────────────────────────────────────────────────
-  // Developer activity
-  // ──────────────────────────────────────────────────────────────
-  {
-    name: 'committers',
-    endpoint: '/committers',
-    rowKey: 'id',
-    paginated: true,
-  },
-
-  // ──────────────────────────────────────────────────────────────
-  // Infrastructure
-  // ──────────────────────────────────────────────────────────────
-  {
     name: 'blueprints',
     endpoint: '/blueprints',
     rowKey: 'id',
     paginated: true,
   },
-  {
-    name: 'resources',
-    endpoint: '/resources',
-    rowKey: 'id',
-    paginated: true,
-  },
 
   // ──────────────────────────────────────────────────────────────
-  // API Catalog
+  // Disabled — uncomment as access is granted or issues resolved
   // ──────────────────────────────────────────────────────────────
-  {
-    name: 'api-catalog-apis',
-    endpoint: '/api-catalog/apis',
-    rowKey: 'id',
-    paginated: true,
-  },
-  {
-    name: 'api-catalog-policies',
-    endpoint: '/api-catalog/policies',
-    rowKey: 'id',
-    paginated: true,
-  },
-  {
-    name: 'api-catalog-compliance-reports',
-    endpoint: '/api-catalog/compliance-reports',
-    rowKey: 'id',
-    paginated: true,
-  },
 
-  // ──────────────────────────────────────────────────────────────
-  // Metrics — snapshot current values
-  // Uncomment if you want to track metric definitions
-  // ──────────────────────────────────────────────────────────────
+  // Returns non-JSON (plain text error) — may need different endpoint or params
   // {
-  //   name: 'metrics',
-  //   endpoint: '/metrics',
+  //   name: 'components',
+  //   endpoint: '/components',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+
+  // Returns non-JSON (plain text error)
+  // {
+  //   name: 'committers',
+  //   endpoint: '/committers',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+
+  // 500 Internal Server Error
+  // {
+  //   name: 'relationships',
+  //   endpoint: '/relationships',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+
+  // 403 Forbidden — API key lacks permission
+  // {
+  //   name: 'entity-mappings',
+  //   endpoint: '/entity-mappings',
   //   rowKey: 'id',
   //   paginated: true,
   // },
   // {
-  //   name: 'metrics-facts',
-  //   endpoint: '/metrics/facts',
+  //   name: 'incidents',
+  //   endpoint: '/incidents',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+  // {
+  //   name: 'resources',
+  //   endpoint: '/resources',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+
+  // 400 Bad Request — likely requires specific query params
+  // {
+  //   name: 'vulnerabilities',
+  //   endpoint: '/vulnerabilities',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+  // {
+  //   name: 'vulnerability-projects',
+  //   endpoint: '/vulnerability-projects',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+
+  // Returns HTML — endpoint may not be available
+  // {
+  //   name: 'vulnerability-identifiers',
+  //   endpoint: '/vulnerability-identifiers',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+  // {
+  //   name: 'api-catalog-apis',
+  //   endpoint: '/api-catalog/apis',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+  // {
+  //   name: 'api-catalog-policies',
+  //   endpoint: '/api-catalog/policies',
+  //   rowKey: 'id',
+  //   paginated: true,
+  // },
+  // {
+  //   name: 'api-catalog-compliance-reports',
+  //   endpoint: '/api-catalog/compliance-reports',
   //   rowKey: 'id',
   //   paginated: true,
   // },

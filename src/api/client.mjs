@@ -103,10 +103,34 @@ export async function apiRequest(endpoint, options = {}) {
     });
 
     const { statusCode } = response;
-    const body = await response.body.json();
+
+    // Read body as text first to handle non-JSON responses safely
+    const rawBody = await response.body.text();
+
+    // Try to parse as JSON
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      // Response is not JSON (HTML error page, plain text, etc.)
+      if (statusCode < 200 || statusCode >= 300) {
+        const preview = rawBody.slice(0, 200).replace(/\n/g, ' ').trim();
+        const error = new Error(
+          `API request failed: ${statusCode} ${method} ${url.pathname} (non-JSON response: "${preview}")`
+        );
+        error.statusCode = statusCode;
+        error.body = rawBody;
+        throw error;
+      }
+      // 2xx but not JSON — unexpected
+      throw new Error(
+        `API returned non-JSON response for ${method} ${url.pathname} (status ${statusCode})`
+      );
+    }
 
     if (statusCode < 200 || statusCode >= 300) {
-      const error = new Error(`API request failed: ${statusCode} ${method} ${url.pathname}`);
+      const msg = body?.message || body?.error || JSON.stringify(body).slice(0, 200);
+      const error = new Error(`API request failed: ${statusCode} ${method} ${url.pathname} — ${msg}`);
       error.statusCode = statusCode;
       error.body = body;
       throw error;

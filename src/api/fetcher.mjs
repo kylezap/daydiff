@@ -11,84 +11,127 @@ function today() {
 }
 
 /**
- * Default page size for paginated requests.
+ * Maximum pages to fetch as a safety valve.
  */
-const DEFAULT_PAGE_SIZE = 100;
+const MAX_ITERATIONS = 200;
 
 /**
- * Maximum pages to fetch as a safety valve (prevents runaway pagination).
+ * Extract rows from a response body using a transform or default logic.
  */
-const MAX_PAGES = 200;
+function extractRows(body, transform, name) {
+  if (transform) return transform(body);
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.data)) return body.data;
+  throw new Error(`Cannot extract rows from ${name} response — provide a transform function`);
+}
+
+/**
+ * Extract pagination metadata from a response body.
+ * Returns { total, pageSize, currentPage } or null if no pagination info found.
+ */
+function extractPagination(body) {
+  const pag = body?.pagination || body?.meta || null;
+  if (!pag) return null;
+
+  return {
+    total: pag.total ?? pag.totalCount ?? pag.count ?? 0,
+    pageSize: pag.limit ?? pag.pageSize ?? pag.per_page ?? 0,
+    currentPage: pag.page ?? pag.currentPage ?? 1,
+    totalPages: pag.totalPages ?? pag.total_pages ?? 0,
+    offset: pag.offset ?? null,
+  };
+}
 
 /**
  * Fetch all pages of a paginated DevGrid API endpoint.
  *
- * DevGrid paginated responses follow the shape:
- *   { data: [...], pagination: { page, limit, total, totalPages } }
+ * Strategy:
+ *   1. First request: send ONLY the user-provided params (no page/limit/offset).
+ *      The DevGrid API treats unknown query params as column filters, so we
+ *      must not send pagination params the API doesn't expect.
+ *   2. Read the pagination metadata from the response to learn the page size
+ *      and total count.
+ *   3. If there are more records, paginate using `offset` (the most common
+ *      server-side pattern that doesn't conflict with column names).
+ *      If `offset` fails, fall back to accepting truncated results with a warning.
  *
  * @param {string} endpoint
- * @param {object} params - Base query params
+ * @param {object} params - User-provided query params (NOT pagination params)
  * @param {object} headers - Extra headers
- * @param {Function|null} transform - Optional transform for extracting rows from body
- * @param {string} name - Dataset name (for logging)
+ * @param {Function|null} transform - Optional row extraction function
+ * @param {string} name - Dataset name for logging
  * @returns {Promise<object[]>} All rows across all pages
  */
 async function fetchAllPages(endpoint, params, headers, transform, name) {
-  let allRows = [];
-  let page = 1;
-  let totalPages = 1;
+  // ── First request: no pagination params ───────────────────────
+  const body = await apiRequest(endpoint, { params, headers });
+  const firstRows = extractRows(body, transform, name);
 
-  while (page <= totalPages && page <= MAX_PAGES) {
-    const pageParams = {
-      ...params,
-      page,
-      limit: params.limit || DEFAULT_PAGE_SIZE,
-    };
-
-    const body = await apiRequest(endpoint, { params: pageParams, headers });
-
-    // Extract rows from this page
-    let rows;
-    if (transform) {
-      rows = transform(body);
-    } else if (Array.isArray(body)) {
-      // Non-paginated: response is the array itself
-      return body;
-    } else if (body && Array.isArray(body.data)) {
-      rows = body.data;
-    } else {
-      throw new Error(`Cannot extract rows from ${name} response — provide a transform function`);
-    }
-
-    if (!Array.isArray(rows)) {
-      throw new Error(`Transform for ${name} did not return an array`);
-    }
-
-    allRows = allRows.concat(rows);
-
-    // Determine total pages from pagination metadata
-    if (body.pagination) {
-      totalPages = body.pagination.totalPages || body.pagination.total_pages || 1;
-      const total = body.pagination.total || body.pagination.totalCount || 0;
-      if (page === 1) {
-        console.log(`[fetch] ${name}: ${total} total records across ${totalPages} page(s)`);
-      }
-    } else if (body.meta) {
-      // Alternative pagination shape
-      totalPages = body.meta.totalPages || body.meta.total_pages || 1;
-    } else {
-      // No pagination metadata — assume single page
-      break;
-    }
-
-    // If this page returned no rows, stop
-    if (rows.length === 0) break;
-
-    page++;
+  if (!Array.isArray(firstRows)) {
+    throw new Error(`Transform for ${name} did not return an array`);
   }
 
-  if (page > MAX_PAGES) {
-    console.warn(`[fetch] ${name}: hit max page limit (${MAX_PAGES}), stopping`);
+  const pag = extractPagination(body);
+
+  // No pagination metadata → single-page response
+  if (!pag || pag.total === 0) {
+    console.log(`[fetch] ${name}: ${firstRows.length} records (no pagination metadata)`);
+    return firstRows;
+  }
+
+  const total = pag.total;
+  const pageSize = pag.pageSize || firstRows.length || 100;
+
+  console.log(`[fetch] ${name}: ${total} total records, page size ${pageSize}`);
+
+  // If we already have everything, done
+  if (firstRows.length >= total) {
+    return firstRows;
+  }
+
+  // ── Paginate with offset ──────────────────────────────────────
+  let allRows = [...firstRows];
+  let iteration = 1;
+
+  while (allRows.length < total && iteration < MAX_ITERATIONS) {
+    const offset = allRows.length;
+    const pageParams = { ...params, offset };
+
+    try {
+      const pageBody = await apiRequest(endpoint, { params: pageParams, headers });
+      const pageRows = extractRows(pageBody, transform, name);
+
+      if (!Array.isArray(pageRows) || pageRows.length === 0) {
+        // No more rows returned — stop
+        break;
+      }
+
+      allRows = allRows.concat(pageRows);
+      console.log(`[fetch] ${name}: fetched ${allRows.length}/${total} records`);
+
+      // If we got fewer than expected, we're done
+      if (pageRows.length < pageSize) break;
+
+      iteration++;
+    } catch (err) {
+      // If offset param fails (e.g. API doesn't support it), accept what we have
+      console.warn(
+        `[fetch] ${name}: pagination with offset failed (${err.message}). ` +
+        `Got ${allRows.length}/${total} records.`
+      );
+      break;
+    }
+  }
+
+  if (iteration >= MAX_ITERATIONS) {
+    console.warn(`[fetch] ${name}: hit max iteration limit (${MAX_ITERATIONS})`);
+  }
+
+  if (allRows.length < total) {
+    console.warn(
+      `[fetch] ${name}: retrieved ${allRows.length} of ${total} total records ` +
+      `(${total - allRows.length} missing — API may not support offset pagination)`
+    );
   }
 
   return allRows;
@@ -120,31 +163,34 @@ async function fetchDataset(datasetConfig, date) {
   } else {
     // Single non-paginated request
     const body = await apiRequest(endpoint, { params, headers });
-    if (transform) {
-      rows = transform(body);
-    } else if (Array.isArray(body)) {
-      rows = body;
-    } else if (body && Array.isArray(body.data)) {
-      rows = body.data;
-    } else {
-      throw new Error(`[fetch] Cannot extract rows from ${name} — provide a transform function`);
-    }
+    rows = extractRows(body, transform, name);
   }
 
   if (!Array.isArray(rows)) {
     throw new Error(`[fetch] Transform for ${name} did not return an array`);
   }
 
-  // Normalize into {key, data} pairs
-  const normalizedRows = rows.map((row, idx) => {
+  // Normalize into {key, data} pairs, deduplicating by row key.
+  // Offset-based pagination can return duplicates if the API lacks stable ordering.
+  const seen = new Map();
+  for (let idx = 0; idx < rows.length; idx++) {
+    const row = rows[idx];
     const key = row[rowKey];
     if (key === undefined || key === null) {
       throw new Error(
         `[fetch] Row ${idx} in ${name} is missing row key field "${rowKey}"`
       );
     }
-    return { key: String(key), data: row };
-  });
+    seen.set(String(key), row); // last occurrence wins
+  }
+  const normalizedRows = Array.from(seen, ([key, data]) => ({ key, data }));
+
+  if (normalizedRows.length < rows.length) {
+    console.warn(
+      `[fetch] ${name}: deduplicated ${rows.length} → ${normalizedRows.length} rows ` +
+      `(${rows.length - normalizedRows.length} duplicate keys removed)`
+    );
+  }
 
   // Ensure dataset record exists in DB
   const dataset = ensureDataset(name, endpoint, rowKey);
