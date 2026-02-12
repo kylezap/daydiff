@@ -4,7 +4,7 @@ import DiffGrid from '../components/DiffGrid.jsx';
 import FilterBar from '../components/FilterBar.jsx';
 import DatePicker from '../components/DatePicker.jsx';
 import {
-  fetchDates, fetchDiffs, fetchDiff, fetchDiffItems, fetchDatasets,
+  fetchDates, fetchDiffs, fetchDiff, fetchDatasets,
 } from '../api/client.js';
 
 export default function DiffDetail() {
@@ -18,10 +18,10 @@ export default function DiffDetail() {
   const [diffs, setDiffs] = useState([]);
   const [selectedDiffId, setSelectedDiffId] = useState(id ? parseInt(id, 10) : null);
   const [diff, setDiff] = useState(null);
-  const [items, setItems] = useState([]);
   const [changeType, setChangeType] = useState(null);
   const [quickFilter, setQuickFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [gridTotal, setGridTotal] = useState(0);
 
   // Load initial data
   useEffect(() => {
@@ -84,23 +84,19 @@ export default function DiffDetail() {
     loadDiffs();
   }, [selectedDate, selectedDataset]);
 
-  // Load diff items when selected diff or change type changes
+  // Load diff metadata when selected diff changes
   useEffect(() => {
     if (!selectedDiffId) return;
-    async function loadItems() {
+    async function loadDiff() {
       try {
-        const [d, itemList] = await Promise.all([
-          fetchDiff(selectedDiffId),
-          fetchDiffItems(selectedDiffId, changeType),
-        ]);
+        const d = await fetchDiff(selectedDiffId);
         setDiff(d);
-        setItems(itemList);
       } catch (err) {
-        console.error('Failed to load diff items:', err);
+        console.error('Failed to load diff:', err);
       }
     }
-    loadItems();
-  }, [selectedDiffId, changeType]);
+    loadDiff();
+  }, [selectedDiffId]);
 
   const handleDateChange = useCallback((date) => {
     setSelectedDate(date);
@@ -112,6 +108,11 @@ export default function DiffDetail() {
     setSelectedDiffId(diffId);
     navigate(`/diff/${diffId}`, { replace: true });
   }, [navigate]);
+
+  // Stable callback for grid total updates
+  const handleTotalChange = useCallback((total) => {
+    setGridTotal(total);
+  }, []);
 
   if (loading) {
     return <div style={{ color: '#8b949e', padding: '2rem' }}>Loading...</div>;
@@ -185,7 +186,7 @@ export default function DiffDetail() {
           <span style={{ color: '#e3b341' }}>~{diff.modified_count} modified</span>
           <span style={{ color: '#8b949e' }}>={diff.unchanged_count} unchanged</span>
           <span style={{ color: '#8b949e', marginLeft: 'auto' }}>
-            {items.length} items shown
+            {gridTotal.toLocaleString()} matching items
           </span>
         </div>
       )}
@@ -201,8 +202,13 @@ export default function DiffDetail() {
         onQuickFilterChange={setQuickFilter}
       />
 
-      {/* AG Grid */}
-      <DiffGrid items={items} quickFilter={quickFilter} />
+      {/* AG Grid — server-side paginated */}
+      <DiffGrid
+        diffId={selectedDiffId}
+        changeType={changeType}
+        quickFilter={quickFilter}
+        onTotalChange={handleTotalChange}
+      />
     </div>
   );
 }

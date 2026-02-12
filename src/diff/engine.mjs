@@ -57,7 +57,30 @@ function findChangedFields(oldRow, newRow) {
 }
 
 /**
+ * Build a slim field-level change map for a modified row.
+ * Returns { fieldName: { old: value, new: value }, ... } for only the changed fields.
+ * This avoids storing the entire old and new row objects in the DB.
+ */
+function buildFieldChanges(oldRow, newRow, changedFields) {
+  const changes = {};
+  for (const field of changedFields) {
+    changes[field] = {
+      old: oldRow[field] ?? null,
+      new: newRow[field] ?? null,
+    };
+  }
+  return changes;
+}
+
+/**
  * Compute row-level diff between two snapshots.
+ *
+ * Storage strategy to minimize DB size:
+ *   - added:    row_data = the new row. No old_data, no field_changes.
+ *   - removed:  row_data = the old row. No new_data, no field_changes.
+ *   - modified: row_data = the new (current) row for display context.
+ *               field_changes = { field: { old, new } } for only changed fields.
+ *               No full old_data blob.
  *
  * @param {Map<string, object>} oldRows - row_key -> row_data from previous snapshot
  * @param {Map<string, object>} newRows - row_key -> row_data from current snapshot
@@ -73,13 +96,12 @@ function computeDiff(oldRows, newRows) {
   // Check for removed and modified rows
   for (const [key, oldData] of oldRows) {
     if (!newRows.has(key)) {
-      // Row was removed
       removed++;
       items.push({
         rowKey: key,
         changeType: 'removed',
-        oldData,
-        newData: null,
+        rowData: oldData,
+        fieldChanges: null,
         changedFields: null,
       });
     } else {
@@ -87,13 +109,12 @@ function computeDiff(oldRows, newRows) {
       const changedFields = findChangedFields(oldData, newData);
 
       if (changedFields.length > 0) {
-        // Row was modified
         modified++;
         items.push({
           rowKey: key,
           changeType: 'modified',
-          oldData,
-          newData,
+          rowData: newData,
+          fieldChanges: buildFieldChanges(oldData, newData, changedFields),
           changedFields,
         });
       } else {
@@ -109,8 +130,8 @@ function computeDiff(oldRows, newRows) {
       items.push({
         rowKey: key,
         changeType: 'added',
-        oldData: null,
-        newData,
+        rowData: newData,
+        fieldChanges: null,
         changedFields: null,
       });
     }

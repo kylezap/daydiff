@@ -209,7 +209,36 @@ async function fetchDataset(datasetConfig, date) {
 }
 
 /**
+ * Default number of datasets to fetch concurrently.
+ * Each dataset still paginates sequentially, but multiple datasets run in parallel.
+ */
+const CONCURRENCY = 3;
+
+/**
+ * Run async tasks with a concurrency limit.
+ * @param {Array<() => Promise>} tasks - Array of zero-arg async functions
+ * @param {number} limit - Max concurrent tasks
+ * @returns {Promise<Array>} Results in the same order as tasks
+ */
+async function runWithConcurrency(tasks, limit) {
+  const results = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < tasks.length) {
+      const idx = nextIndex++;
+      results[idx] = await tasks[idx]();
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+/**
  * Fetch all configured datasets and store snapshots.
+ * Runs up to CONCURRENCY datasets in parallel.
  *
  * @param {string} [date] - Override date (default: today)
  * @returns {Promise<Array<{dataset: string, rowCount: number, snapshotId: number}>>}
@@ -217,23 +246,22 @@ async function fetchDataset(datasetConfig, date) {
 export async function fetchAllDatasets(date) {
   const fetchDate = date || today();
   console.log(`\n[fetch] Starting fetch for ${fetchDate}`);
-  console.log(`[fetch] ${datasets.length} dataset(s) configured\n`);
+  console.log(`[fetch] ${datasets.length} dataset(s) configured, concurrency: ${CONCURRENCY}\n`);
 
-  const results = [];
-
-  for (const ds of datasets) {
+  const tasks = datasets.map((ds) => async () => {
     try {
-      const result = await fetchDataset(ds, fetchDate);
-      results.push(result);
+      return await fetchDataset(ds, fetchDate);
     } catch (err) {
       console.error(`[fetch] ERROR fetching ${ds.name}: ${err.message}`);
-      results.push({
+      return {
         dataset: ds.name,
         error: err.message,
         rowCount: 0,
-      });
+      };
     }
-  }
+  });
+
+  const results = await runWithConcurrency(tasks, CONCURRENCY);
 
   const successCount = results.filter(r => !r.error).length;
   console.log(`\n[fetch] Complete: ${successCount}/${datasets.length} datasets fetched successfully`);

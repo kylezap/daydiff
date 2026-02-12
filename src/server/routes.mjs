@@ -3,6 +3,7 @@ import {
   listDiffs,
   getDiff,
   getDiffItems,
+  getDiffItemsPaginated,
   getSummaryForDate,
   getTrend,
   getAvailableDates,
@@ -61,23 +62,73 @@ export function setupRoutes(app) {
   });
 
   // ─── GET /api/diffs/:id/items ───────────────────────────────────
+  // Supports server-side pagination for large diffs (30k+ rows).
+  // Query params: offset, limit, change_type, search, sort, dir
   app.get('/api/diffs/:id/items', (req, res) => {
     try {
-      const { change_type } = req.query;
-      const items = getDiffItems(
-        parseInt(req.params.id, 10),
-        change_type || null
-      );
+      const diffId = parseInt(req.params.id, 10);
+      const {
+        offset = '0',
+        limit = '100',
+        change_type,
+        search,
+        sort = 'change_type',
+        dir = 'ASC',
+      } = req.query;
 
-      // Parse JSON fields for the client
-      const parsed = items.map(item => ({
-        ...item,
-        old_data: item.old_data ? JSON.parse(item.old_data) : null,
-        new_data: item.new_data ? JSON.parse(item.new_data) : null,
-        changed_fields: item.changed_fields ? JSON.parse(item.changed_fields) : null,
-      }));
+      const { rows, total } = getDiffItemsPaginated(diffId, {
+        offset: parseInt(offset, 10),
+        limit: parseInt(limit, 10),
+        changeType: change_type || null,
+        search: search || null,
+        sortField: sort,
+        sortDir: dir,
+      });
 
-      res.json({ data: parsed });
+      // Parse JSON fields and reconstruct old_data/new_data for the dashboard.
+      // DB stores slim format: row_data + field_changes (only changed field values).
+      // We reconstruct old_data/new_data so the grid cell renderer can show diffs.
+      const parsed = rows.map(item => {
+        const rowData = item.row_data ? JSON.parse(item.row_data) : null;
+        const fieldChanges = item.field_changes ? JSON.parse(item.field_changes) : null;
+        const changedFields = item.changed_fields ? JSON.parse(item.changed_fields) : null;
+
+        let oldData = null;
+        let newData = null;
+
+        if (item.change_type === 'added') {
+          newData = rowData;
+        } else if (item.change_type === 'removed') {
+          oldData = rowData;
+        } else if (item.change_type === 'modified') {
+          newData = rowData;
+          // Reconstruct old_data from new row + field changes
+          if (rowData && fieldChanges) {
+            oldData = { ...rowData };
+            for (const [field, change] of Object.entries(fieldChanges)) {
+              oldData[field] = change.old;
+            }
+          }
+        }
+
+        return {
+          ...item,
+          row_data: undefined, // Don't send raw column to client
+          field_changes: undefined,
+          old_data: oldData,
+          new_data: newData,
+          changed_fields: changedFields,
+        };
+      });
+
+      res.json({
+        data: parsed,
+        pagination: {
+          offset: parseInt(offset, 10),
+          limit: parseInt(limit, 10),
+          total,
+        },
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

@@ -41,6 +41,21 @@ export async function fetchDiffItems(id, changeType) {
   return data;
 }
 
+/**
+ * Fetch diff items with server-side pagination.
+ * @returns {{ data: Array, pagination: { offset, limit, total } }}
+ */
+export async function fetchDiffItemsPage(id, { offset = 0, limit = 100, changeType, search, sort, dir } = {}) {
+  return apiFetch(`${BASE}/diffs/${id}/items`, {
+    offset,
+    limit,
+    change_type: changeType,
+    search,
+    sort,
+    dir,
+  });
+}
+
 export async function fetchSummary(date) {
   const result = await apiFetch(`${BASE}/summary`, { date });
   return result;

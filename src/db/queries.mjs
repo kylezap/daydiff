@@ -119,7 +119,7 @@ export function insertDiff(datasetId, fromDate, toDate, summary, items) {
     const diffId = Number(result.lastInsertRowid);
 
     const insertItem = db.prepare(`
-      INSERT INTO diff_items (diff_id, row_key, change_type, old_data, new_data, changed_fields)
+      INSERT INTO diff_items (diff_id, row_key, change_type, row_data, field_changes, changed_fields)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
@@ -128,8 +128,8 @@ export function insertDiff(datasetId, fromDate, toDate, summary, items) {
         diffId,
         item.rowKey,
         item.changeType,
-        item.oldData ? JSON.stringify(item.oldData) : null,
-        item.newData ? JSON.stringify(item.newData) : null,
+        item.rowData ? JSON.stringify(item.rowData) : null,
+        item.fieldChanges ? JSON.stringify(item.fieldChanges) : null,
         item.changedFields ? JSON.stringify(item.changedFields) : null
       );
     }
@@ -187,6 +187,7 @@ export function getDiff(diffId) {
 
 /**
  * Get diff items for a diff, optionally filtered by change type.
+ * Returns all items (use getDiffItemsPaginated for large datasets).
  */
 export function getDiffItems(diffId, changeType = null) {
   const db = getDb();
@@ -198,6 +199,67 @@ export function getDiffItems(diffId, changeType = null) {
   return db.prepare(
     'SELECT * FROM diff_items WHERE diff_id = ? ORDER BY change_type, row_key'
   ).all(diffId);
+}
+
+/**
+ * Get diff items with server-side pagination, filtering, and search.
+ *
+ * @param {number} diffId
+ * @param {object} opts
+ * @param {number} opts.offset - Starting row (default 0)
+ * @param {number} opts.limit - Page size (default 100)
+ * @param {string|null} opts.changeType - Filter by change type
+ * @param {string|null} opts.search - Quick filter across row_key and data fields
+ * @param {string} opts.sortField - Sort column (default 'change_type')
+ * @param {string} opts.sortDir - 'ASC' or 'DESC' (default 'ASC')
+ * @returns {{ rows: Array, total: number }}
+ */
+export function getDiffItemsPaginated(diffId, opts = {}) {
+  const db = getDb();
+  const {
+    offset = 0,
+    limit = 100,
+    changeType = null,
+    search = null,
+    sortField = 'change_type',
+    sortDir = 'ASC',
+  } = opts;
+
+  // Whitelist sort fields to prevent SQL injection
+  const allowedSorts = ['change_type', 'row_key', 'id'];
+  const safeSort = allowedSorts.includes(sortField) ? sortField : 'change_type';
+  const safeDir = sortDir.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+  // Build WHERE clause
+  const conditions = ['diff_id = ?'];
+  const params = [diffId];
+
+  if (changeType) {
+    conditions.push('change_type = ?');
+    params.push(changeType);
+  }
+
+  if (search) {
+    // Search across row_key, row_data, field_changes, changed_fields
+    conditions.push(
+      '(row_key LIKE ? OR row_data LIKE ? OR field_changes LIKE ? OR changed_fields LIKE ?)'
+    );
+    const like = `%${search}%`;
+    params.push(like, like, like, like);
+  }
+
+  const where = conditions.join(' AND ');
+
+  // Count total matching rows
+  const countRow = db.prepare(`SELECT COUNT(*) as cnt FROM diff_items WHERE ${where}`).get(...params);
+  const total = countRow.cnt;
+
+  // Fetch page
+  const rows = db.prepare(
+    `SELECT * FROM diff_items WHERE ${where} ORDER BY ${safeSort} ${safeDir}, row_key ASC LIMIT ? OFFSET ?`
+  ).all(...params, limit, offset);
+
+  return { rows, total };
 }
 
 /**

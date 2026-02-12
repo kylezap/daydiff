@@ -42,14 +42,18 @@ CREATE TABLE IF NOT EXISTS diffs (
   UNIQUE(dataset_id, from_date, to_date)
 );
 
--- Individual row-level changes
+-- Individual row-level changes (slim storage format)
+--   row_data:       the current (or last-known) full row as JSON
+--                   For added/modified: the new row.  For removed: the old row.
+--   field_changes:  for modified rows only — { field: { old, new } } for changed fields
+--   changed_fields: JSON array of field names that changed (for modified rows)
 CREATE TABLE IF NOT EXISTS diff_items (
   id INTEGER PRIMARY KEY,
   diff_id INTEGER NOT NULL REFERENCES diffs(id),
   row_key TEXT NOT NULL,
   change_type TEXT NOT NULL CHECK(change_type IN ('added','removed','modified')),
-  old_data TEXT,
-  new_data TEXT,
+  row_data TEXT,
+  field_changes TEXT,
   changed_fields TEXT,
   UNIQUE(diff_id, row_key)
 );
