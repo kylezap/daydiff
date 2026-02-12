@@ -141,7 +141,7 @@ function buildGridData(items) {
  *   quickFilter — Text to search across all columns
  *   onTotalChange — Callback when total row count changes
  */
-export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChange }) {
+export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChange, diffMeta }) {
   const gridRef = useRef(null);
   const [rowData, setRowData] = useState([]);
   const [columnDefs, setColumnDefs] = useState([]);
@@ -217,6 +217,40 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
     }
   }, []);
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportCsv = useCallback(async () => {
+    if (!diffId) return;
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (changeType) params.set('change_type', changeType);
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      const qs = params.toString();
+      const url = `/api/diffs/${diffId}/export${qs ? `?${qs}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+
+      // Extract filename from Content-Disposition or build a default
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : `diff-${diffId}.csv`;
+
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      console.error('CSV export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, [diffId, changeType, debouncedSearch]);
+
   if (!diffId) {
     return (
       <div style={{ color: '#8b949e', padding: '2rem', textAlign: 'center' }}>
@@ -260,6 +294,14 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
                 <option key={n} value={n}>{n} / page</option>
               ))}
             </select>
+            <button
+              onClick={handleExportCsv}
+              disabled={exporting || total === 0}
+              style={exportBtnStyle}
+              title="Export all matching rows as CSV"
+            >
+              {exporting ? 'Exporting…' : '⬇ Export CSV'}
+            </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -331,4 +373,16 @@ const selectStyle = {
   padding: '0.25rem 0.4rem',
   fontSize: '0.8rem',
   cursor: 'pointer',
+};
+
+const exportBtnStyle = {
+  background: '#21262d',
+  color: '#58a6ff',
+  border: '1px solid #30363d',
+  borderRadius: 4,
+  padding: '0.25rem 0.65rem',
+  fontSize: '0.8rem',
+  cursor: 'pointer',
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
 };

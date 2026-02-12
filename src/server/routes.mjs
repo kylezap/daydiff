@@ -137,6 +137,89 @@ export function setupRoutes(app) {
     }
   });
 
+  // ─── GET /api/diffs/:id/export ─────────────────────────────────
+  // Export all matching diff items as CSV (respects change_type and search filters).
+  app.get('/api/diffs/:id/export', (req, res) => {
+    try {
+      const diffId = parseInt(req.params.id, 10);
+      const diff = getDiff(diffId);
+      if (!diff) {
+        return res.status(404).json({ error: 'Diff not found' });
+      }
+
+      const { change_type, search } = req.query;
+
+      // Fetch ALL matching rows (no offset/limit)
+      const { rows } = getDiffItemsPaginated(diffId, {
+        offset: 0,
+        limit: 1_000_000,
+        changeType: change_type || null,
+        search: search || null,
+        sortField: 'change_type',
+        sortDir: 'ASC',
+      });
+
+      // Collect all data field names across every row
+      const fieldSet = new Set();
+      const parsed = rows.map(item => {
+        const rowData = item.row_data ? JSON.parse(item.row_data) : {};
+        const fieldChanges = item.field_changes ? JSON.parse(item.field_changes) : null;
+        const changedFields = item.changed_fields ? JSON.parse(item.changed_fields) : [];
+
+        Object.keys(rowData).forEach(k => fieldSet.add(k));
+
+        // Reconstruct old values for modified rows
+        let oldData = null;
+        if (item.change_type === 'modified' && fieldChanges) {
+          oldData = { ...rowData };
+          for (const [field, change] of Object.entries(fieldChanges)) {
+            oldData[field] = change.old;
+          }
+        }
+
+        return {
+          row_key: item.row_key,
+          change_type: item.change_type,
+          changed_fields: changedFields,
+          rowData,
+          oldData,
+        };
+      });
+
+      const dataFields = Array.from(fieldSet).sort();
+
+      // Build CSV header: row_key, change_type, changed_fields, then each data field
+      const csvHeader = ['row_key', 'change_type', 'changed_fields', ...dataFields];
+
+      // Build CSV rows
+      const csvRows = parsed.map(item => {
+        const values = [
+          csvEscape(item.row_key),
+          csvEscape(item.change_type),
+          csvEscape((item.changed_fields || []).join('; ')),
+        ];
+
+        for (const field of dataFields) {
+          const val = item.rowData[field];
+          if (item.change_type === 'modified' && item.changed_fields?.includes(field) && item.oldData) {
+            // Show "old → new" for changed fields
+            values.push(csvEscape(`${formatCsvVal(item.oldData[field])} → ${formatCsvVal(val)}`));
+          } else {
+            values.push(csvEscape(formatCsvVal(val)));
+          }
+        }
+        return values.join(',');
+      });
+
+      const filename = `${diff.dataset_name}_${diff.from_date}_to_${diff.to_date}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send([csvHeader.join(','), ...csvRows].join('\n'));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── GET /api/summary ──────────────────────────────────────────
   app.get('/api/summary', (req, res) => {
     try {
@@ -172,4 +255,20 @@ export function setupRoutes(app) {
       res.status(500).json({ error: err.message });
     }
   });
+}
+
+// ─── CSV helpers ──────────────────────────────────────────────────
+
+function formatCsvVal(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
+function csvEscape(val) {
+  const str = String(val ?? '');
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
 }

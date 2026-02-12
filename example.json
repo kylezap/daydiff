@@ -1,0 +1,486 @@
+{
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "offset": 0,
+      "total": 5352,
+      "links": {
+        "first": "https://prod.api.devgrid.io/vulnerabilities?limit=10&offset=0",
+        "last": "https://prod.api.devgrid.io/vulnerabilities?limit=10&offset=5350",
+        "next": "https://prod.api.devgrid.io/vulnerabilities?limit=10&offset=10",
+        "previous": "https://prod.api.devgrid.io/vulnerabilities?limit=10&offset=-10"
+      }
+    },
+    "data": [
+      {
+        "id": "5f911b94-5dbd-4eb9-a176-e96de9feba53",
+        "name": "'role' is not defined",
+        "description": "Serverless Function should not share IAM Role to ensure it will have the minimum privileges needed to perform the required tasks",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "0105ed4d48c78ef4cc4b419a28665a1d54ad2e91ce530a271247e28aedb4e4cf",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "HIGH",
+        "status": "detected",
+        "location": {
+          "line": 303,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'role' is not defined",
+          "queryId": "165aae3b-a56a-48f3-b76d-d2b5083f5b8f [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Unique IAM Role [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Unique IAM Role",
+          "expectedValue": "'role' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-09-18T14:51:24.000Z",
+        "atRiskDate": "2025-09-03T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.840Z",
+        "updatedAt": "2025-10-09T18:01:12.203Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "e450338a-4457-4b47-a673-1aada6a5008d",
+        "name": "'tracing' is not defined",
+        "description": "Serverless Function should have Tracing enabled. For this, property 'tracing' should have the value 'Active'",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "01fccdf2e1391b2149af9aedb5013b19dda447e3f48971b530b3e71fe565b47c",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "LOW",
+        "status": "detected",
+        "location": {
+          "line": 1153,
+          "group": "Observability [Taken from category]",
+          "value": "'tracing' is not defined",
+          "queryId": "0d7ef70f-e176-44e6-bdba-add3e429788d [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without X-Ray Tracing [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without X-Ray Tracing",
+          "expectedValue": "'tracing' should be defined and set to Active"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-12-02T14:51:24.000Z",
+        "atRiskDate": "2025-10-23T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.835Z",
+        "updatedAt": "2025-10-09T18:01:12.168Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "2a855b73-0257-4d88-89ad-802bc290c903",
+        "name": "'role' is not defined",
+        "description": "Serverless Function should not share IAM Role to ensure it will have the minimum privileges needed to perform the required tasks",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "1d73e3318efceffa8cf4b94794085a728378f24d73b07e3b564541e6ae1a7aee",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "HIGH",
+        "status": "detected",
+        "location": {
+          "line": 1292,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'role' is not defined",
+          "queryId": "165aae3b-a56a-48f3-b76d-d2b5083f5b8f [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Unique IAM Role [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Unique IAM Role",
+          "expectedValue": "'role' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-09-18T14:51:24.000Z",
+        "atRiskDate": "2025-09-03T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.779Z",
+        "updatedAt": "2025-10-09T18:01:12.203Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "3aeaaf31-1924-4e36-8ca4-e09903bf5269",
+        "name": "'onError' is not defined",
+        "description": "Serverless Function should be configured for a Dead Letter Queue(DLQ). A Dead Letter Queue(DLQ) can be set up in 'onError' config parameter",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "49ed63f4663040254a18400b9c027153842dc267e3d3b686a4d4d39e81942637",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "LOW",
+        "status": "detected",
+        "location": {
+          "line": 1292,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'onError' is not defined",
+          "queryId": "dec7bc85-d156-4f64-9a33-96ed3d9f3fed [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Dead Letter Queue [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Dead Letter Queue",
+          "expectedValue": "'onError' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-12-02T14:51:24.000Z",
+        "atRiskDate": "2025-10-23T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.701Z",
+        "updatedAt": "2025-10-09T18:01:18.518Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "0a9f26fa-29b4-477f-a54c-c18f93528cfd",
+        "name": "'onError' is not defined",
+        "description": "Serverless Function should be configured for a Dead Letter Queue(DLQ). A Dead Letter Queue(DLQ) can be set up in 'onError' config parameter",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "5277be79c6c3f44546b054e44731c03fb16cc435b5a52b6405f1c37eed98cbb7",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "LOW",
+        "status": "detected",
+        "location": {
+          "line": 1273,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'onError' is not defined",
+          "queryId": "dec7bc85-d156-4f64-9a33-96ed3d9f3fed [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Dead Letter Queue [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Dead Letter Queue",
+          "expectedValue": "'onError' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-12-02T14:51:24.000Z",
+        "atRiskDate": "2025-10-23T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.690Z",
+        "updatedAt": "2025-10-09T18:01:17.995Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "7e0bb7a6-ca80-415d-92e1-31ff97d8a01e",
+        "name": "'onError' is not defined",
+        "description": "Serverless Function should be configured for a Dead Letter Queue(DLQ). A Dead Letter Queue(DLQ) can be set up in 'onError' config parameter",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "8690d2727fd5e5340d9b35d662b57b7d758e8924c4393838da8b46fa0e908550",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "LOW",
+        "status": "detected",
+        "location": {
+          "line": 1239,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'onError' is not defined",
+          "queryId": "dec7bc85-d156-4f64-9a33-96ed3d9f3fed [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Dead Letter Queue [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Dead Letter Queue",
+          "expectedValue": "'onError' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-12-02T14:51:24.000Z",
+        "atRiskDate": "2025-10-23T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.569Z",
+        "updatedAt": "2025-10-09T18:01:18.508Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "ad951e3d-95ac-4378-87e2-71d0e50adb71",
+        "name": "'onError' is not defined",
+        "description": "Serverless Function should be configured for a Dead Letter Queue(DLQ). A Dead Letter Queue(DLQ) can be set up in 'onError' config parameter",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "8a63441af0bd411b74cb1d3a54d1766532c9f9aa6c6559fc001b3d9112ab7065",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "LOW",
+        "status": "detected",
+        "location": {
+          "line": 1075,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'onError' is not defined",
+          "queryId": "dec7bc85-d156-4f64-9a33-96ed3d9f3fed [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Dead Letter Queue [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Dead Letter Queue",
+          "expectedValue": "'onError' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-12-02T14:51:24.000Z",
+        "atRiskDate": "2025-10-23T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.549Z",
+        "updatedAt": "2025-10-09T18:01:18.508Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "0c81639d-f579-4ee0-8e4d-6efa594f13f0",
+        "name": "'onError' is not defined",
+        "description": "Serverless Function should be configured for a Dead Letter Queue(DLQ). A Dead Letter Queue(DLQ) can be set up in 'onError' config parameter",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "90fee8d8fadb8fb9753453ba4d9f16504ba9ed5c8da269512a217a844c0429da",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "LOW",
+        "status": "detected",
+        "location": {
+          "line": 1263,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'onError' is not defined",
+          "queryId": "dec7bc85-d156-4f64-9a33-96ed3d9f3fed [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Dead Letter Queue [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Dead Letter Queue",
+          "expectedValue": "'onError' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-12-02T14:51:24.000Z",
+        "atRiskDate": "2025-10-23T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.541Z",
+        "updatedAt": "2025-10-09T18:01:12.158Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "96ae54ff-933f-4f4a-baac-058e9b70a185",
+        "name": "'role' is not defined",
+        "description": "Serverless Function should not share IAM Role to ensure it will have the minimum privileges needed to perform the required tasks",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "988d3de5b49462e532a157702da6c1db771bf3ad82fe5ced4496aee78a21957e",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "HIGH",
+        "status": "detected",
+        "location": {
+          "line": 1239,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'role' is not defined",
+          "queryId": "165aae3b-a56a-48f3-b76d-d2b5083f5b8f [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Unique IAM Role [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Unique IAM Role",
+          "expectedValue": "'role' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-09-18T14:51:24.000Z",
+        "atRiskDate": "2025-09-03T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.497Z",
+        "updatedAt": "2025-10-09T18:01:17.919Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      },
+      {
+        "id": "c3378dba-edb4-48a0-9276-0f26e90a356a",
+        "name": "'tags' is not defined",
+        "description": "Serverless Function should have associated tags",
+        "originatingSystem": "checkmarx",
+        "originatingSystemId": "a4da51e1e62abe247cb8b5b6ea9f5758a700ed7b419ec585abd03f3d8cfbad7c",
+        "originatingSystemUrl": "https://deu.ast.checkmarx.net/results/ad287f45-915e-4252-bf05-520766b14af3/efc7598b-c968-4607-8e16-d2a6c8b6f2ae/kics",
+        "scanType": "kics",
+        "severity": "LOW",
+        "status": "detected",
+        "location": {
+          "line": 303,
+          "group": "Insecure Configurations [Taken from category]",
+          "value": "'tags' is not defined",
+          "queryId": "f99d3482-fa8c-4f79-bad9-35212dded164 [Taken from query_id]",
+          "fileName": "/serverless.yml",
+          "platform": "ServerlessFW",
+          "queryUrl": "Serverless Function Without Tags [Taken from query_name]",
+          "issueType": "MissingAttribute",
+          "queryName": "Serverless Function Without Tags",
+          "expectedValue": "'tags' should be defined inside the function"
+        },
+        "solution": null,
+        "attributes": {
+          "open_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "last_detected_at": "2025-08-04T15:52:27.000Z",
+          "historical_branches": [
+            "feature-add-appconfig-ff"
+          ],
+          "vulnerability_details": {}
+        },
+        "openDate": "2025-08-04T14:51:24.000Z",
+        "closeDate": null,
+        "vulnerableId": "14750e99-5a36-4279-997f-657af45e0185",
+        "vulnerableType": "repo",
+        "vulnerabilityProjectId": "6bd73dbe-dc87-4e44-8575-c0a2f7d494f5",
+        "dueDate": "2025-12-02T14:51:24.000Z",
+        "atRiskDate": "2025-10-23T14:51:24.000Z",
+        "accountId": "ea750486-1cf7-413b-b668-b4a9fba86ce1",
+        "createdAt": "2025-08-04T19:55:32.481Z",
+        "updatedAt": "2025-10-09T18:01:18.506Z",
+        "deleted_at": null,
+        "vulnerable_id": "14750e99-5a36-4279-997f-657af45e0185",
+        "identifiers": []
+      }
+    ]
+  }
