@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SummaryCards from '../components/SummaryCards.jsx';
 import { ChangeDistributionChart, TrendChart } from '../components/DiffChart.jsx';
@@ -22,6 +22,14 @@ export default function Overview({ category }) {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Dataset filter — empty Set means "all", otherwise the checked dataset IDs
+  const [selectedDatasetIds, setSelectedDatasetIds] = useState(new Set());
+
+  // Reset filter when category changes
+  useEffect(() => {
+    setSelectedDatasetIds(new Set());
+  }, [category]);
 
   // Load initial data (scoped to category)
   useEffect(() => {
@@ -72,6 +80,57 @@ export default function Overview({ category }) {
     loadDate();
   }, [selectedDate, category]);
 
+  const hasFilter = selectedDatasetIds.size > 0;
+
+  // Filter summary to selected datasets (for cards + distribution chart)
+  const filteredSummary = useMemo(() => {
+    if (!hasFilter) return summary;
+    const selectedNames = new Set(
+      datasets.filter(d => selectedDatasetIds.has(d.id)).map(d => d.name)
+    );
+    return summary.filter(s => selectedNames.has(s.dataset_name));
+  }, [summary, selectedDatasetIds, datasets, hasFilter]);
+
+  // Filter trend to selected datasets
+  const filteredTrend = useMemo(() => {
+    if (!hasFilter) return trend;
+    const selectedNames = new Set(
+      datasets.filter(d => selectedDatasetIds.has(d.id)).map(d => d.name)
+    );
+    // Trend items have a dataset_name field — aggregate only the selected ones
+    // If trend entries don't carry dataset_name, return as-is (the API already aggregates)
+    if (trend.length > 0 && trend[0].dataset_name) {
+      return trend.filter(t => selectedNames.has(t.dataset_name));
+    }
+    return trend;
+  }, [trend, selectedDatasetIds, datasets, hasFilter]);
+
+  // Build display label for active filter
+  const filterLabel = useMemo(() => {
+    if (!hasFilter) return null;
+    const names = datasets
+      .filter(d => selectedDatasetIds.has(d.id))
+      .map(d => d.name);
+    if (names.length <= 2) return names.join(', ');
+    return `${names.length} datasets`;
+  }, [selectedDatasetIds, datasets, hasFilter]);
+
+  function toggleDataset(dsId) {
+    setSelectedDatasetIds(prev => {
+      const next = new Set(prev);
+      if (next.has(dsId)) {
+        next.delete(dsId);
+      } else {
+        next.add(dsId);
+      }
+      return next;
+    });
+  }
+
+  function clearFilter() {
+    setSelectedDatasetIds(new Set());
+  }
+
   if (loading) {
     return <div style={{ color: '#8b949e', padding: '2rem' }}>Loading...</div>;
   }
@@ -101,26 +160,45 @@ export default function Overview({ category }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ color: '#e1e4e8', fontSize: '1.25rem', fontWeight: 600 }}>
           {TITLES[category] || 'Overview'}
+          {hasFilter && (
+            <span style={{ color: '#58a6ff', fontWeight: 400, fontSize: '0.9rem', marginLeft: '0.75rem' }}>
+              Filtered: {filterLabel}
+              <button
+                onClick={clearFilter}
+                style={clearFilterBtn}
+                title="Clear filter"
+              >
+                &times;
+              </button>
+            </span>
+          )}
         </h2>
         <DatePicker dates={dates} selected={selectedDate} onChange={setSelectedDate} />
       </div>
 
-      {/* Summary cards */}
-      <SummaryCards summary={summary} />
+      {/* Summary cards — filtered */}
+      <SummaryCards summary={filteredSummary} />
 
-      {/* Charts */}
+      {/* Charts — filtered */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
         <div style={panelStyle}>
           <h3 style={panelTitle}>Change Distribution by Dataset</h3>
-          {summary.length > 0
-            ? <ChangeDistributionChart summary={summary} />
+          {filteredSummary.length > 0
+            ? <ChangeDistributionChart summary={filteredSummary} />
             : <div style={{ color: '#8b949e', padding: '2rem', textAlign: 'center' }}>No data for this date</div>
           }
         </div>
         <div style={panelStyle}>
-          <h3 style={panelTitle}>Trend (Last 30 Days)</h3>
-          {trend.length > 0
-            ? <TrendChart trend={trend} />
+          <h3 style={panelTitle}>
+            Trend (Last 30 Days)
+            {hasFilter && (
+              <span style={{ color: '#8b949e', fontWeight: 400, fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+                — {filterLabel}
+              </span>
+            )}
+          </h3>
+          {filteredTrend.length > 0
+            ? <TrendChart trend={filteredTrend} />
             : <div style={{ color: '#8b949e', padding: '2rem', textAlign: 'center' }}>Not enough data for trend</div>
           }
         </div>
@@ -133,6 +211,7 @@ export default function Overview({ category }) {
           <table style={tableStyle}>
             <thead>
               <tr>
+                <th style={{ ...thStyle, width: 40 }}></th>
                 <th style={thStyle}>Dataset</th>
                 <th style={thStyle}>From</th>
                 <th style={thStyle}>To</th>
@@ -144,25 +223,49 @@ export default function Overview({ category }) {
               </tr>
             </thead>
             <tbody>
-              {summary.map((s) => (
-                <tr key={s.diff_id} style={trStyle}>
-                  <td style={tdStyle}>{s.dataset_name}</td>
-                  <td style={tdStyle}>{s.from_date}</td>
-                  <td style={tdStyle}>{s.to_date}</td>
-                  <td style={{ ...tdStyle, color: '#3fb950', fontVariantNumeric: 'tabular-nums' }}>+{s.added_count}</td>
-                  <td style={{ ...tdStyle, color: '#f85149', fontVariantNumeric: 'tabular-nums' }}>-{s.removed_count}</td>
-                  <td style={{ ...tdStyle, color: '#e3b341', fontVariantNumeric: 'tabular-nums' }}>~{s.modified_count}</td>
-                  <td style={{ ...tdStyle, color: '#8b949e', fontVariantNumeric: 'tabular-nums' }}>{s.unchanged_count}</td>
-                  <td style={tdStyle}>
-                    <button
-                      onClick={() => navigate(`${basePath}/diff/${s.diff_id}`)}
-                      style={viewBtnStyle}
+              {summary.map((s) => {
+                const dsId = datasets.find(d => d.name === s.dataset_name)?.id;
+                const isSelected = dsId != null && selectedDatasetIds.has(dsId);
+                return (
+                  <tr
+                    key={s.diff_id}
+                    style={{
+                      ...trStyle,
+                      background: isSelected ? 'rgba(88, 166, 255, 0.08)' : undefined,
+                    }}
+                  >
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleDataset(dsId)}
+                        style={checkboxStyle}
+                        title={isSelected ? 'Clear filter' : `Filter to ${s.dataset_name}`}
+                      />
+                    </td>
+                    <td
+                      style={{ ...tdStyle, cursor: 'pointer', fontWeight: isSelected ? 600 : 400 }}
+                      onClick={() => toggleDataset(dsId)}
                     >
-                      View Details
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      {s.dataset_name}
+                    </td>
+                    <td style={tdStyle}>{s.from_date}</td>
+                    <td style={tdStyle}>{s.to_date}</td>
+                    <td style={{ ...tdStyle, color: '#3fb950', fontVariantNumeric: 'tabular-nums' }}>+{s.added_count}</td>
+                    <td style={{ ...tdStyle, color: '#f85149', fontVariantNumeric: 'tabular-nums' }}>-{s.removed_count}</td>
+                    <td style={{ ...tdStyle, color: '#e3b341', fontVariantNumeric: 'tabular-nums' }}>~{s.modified_count}</td>
+                    <td style={{ ...tdStyle, color: '#8b949e', fontVariantNumeric: 'tabular-nums' }}>{s.unchanged_count}</td>
+                    <td style={tdStyle}>
+                      <button
+                        onClick={() => navigate(`${basePath}/diff/${s.diff_id}`)}
+                        style={viewBtnStyle}
+                      >
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         ) : (
@@ -241,4 +344,23 @@ const viewBtnStyle = {
   fontSize: '0.8rem',
   cursor: 'pointer',
   fontWeight: 500,
+};
+
+const clearFilterBtn = {
+  background: 'none',
+  border: 'none',
+  color: '#8b949e',
+  cursor: 'pointer',
+  fontSize: '1rem',
+  marginLeft: '0.35rem',
+  padding: '0 0.2rem',
+  lineHeight: 1,
+  verticalAlign: 'middle',
+};
+
+const checkboxStyle = {
+  cursor: 'pointer',
+  width: 15,
+  height: 15,
+  accentColor: '#58a6ff',
 };
