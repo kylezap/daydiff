@@ -17,17 +17,17 @@
 const assets = [
   // ── Add your tracked applications here ───────────────────────
   {
-    name: 'app-one',
-    vulnerableId: '14750e99-5a36-4279-997f-657af45e0185',
+    name: 'Digital One Flex (17040)',
+    vulnerableId: '7d53603e-0973-437d-a3da-a129cb8108ef',
   },
-  // {
-  //   name: 'app-two',
-  //   vulnerableId: '<paste-uuid-here>',
-  // },
-  // {
-  //   name: 'app-three',
-  //   vulnerableId: '<paste-uuid-here>',
-  // },
+  {
+    name: 'Digital One LFI (12430)',
+    vulnerableId: 'eb1148af-b67d-4e13-a07d-95d473a097a0',
+  },
+  {
+    name: 'Consumer e-Banking Services (2466)',
+    vulnerableId: 'b6473451-0525-41d7-8a81-0faad1edf1c4',
+  },
 ];
 
 export default assets;
