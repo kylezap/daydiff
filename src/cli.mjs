@@ -9,7 +9,9 @@ import {
   listDatasets,
   listDiffs,
   getAvailableDates,
+  pruneSnapshots,
 } from './db/queries.mjs';
+import config from '../config/default.mjs';
 
 const program = new Command();
 
@@ -73,6 +75,16 @@ program
       const fetchFailed = fetchResults.filter(r => r.error);
 
       diffAllDatasets(opts.date);
+
+      // Auto-prune old snapshots
+      const retentionDays = config.retention.snapshotDays;
+      const pruneResult = pruneSnapshots(retentionDays);
+      if (pruneResult.deletedSnapshots > 0) {
+        console.log(
+          `\n[prune] Cleaned up ${pruneResult.deletedSnapshots} snapshot(s) ` +
+          `and ${pruneResult.deletedRows} row(s) older than ${retentionDays} days`
+        );
+      }
 
       if (fetchFailed.length > 0) {
         console.warn(`\n⚠  ${fetchFailed.length} dataset(s) had fetch errors`);
@@ -158,6 +170,42 @@ program
       console.log('\n═══════════════════════════════════════════\n');
     } catch (err) {
       console.error(`[status] Error: ${err.message}`);
+      process.exitCode = 1;
+    } finally {
+      closeDb();
+    }
+  });
+
+// ─── prune ──────────────────────────────────────────────────────
+
+program
+  .command('prune')
+  .description('Delete old snapshots to reclaim disk space (keeps diffs)')
+  .option('--days <days>', 'Retention period in days', undefined)
+  .action((opts) => {
+    try {
+      getDb();
+
+      const retentionDays = opts.days
+        ? parseInt(opts.days, 10)
+        : config.retention.snapshotDays;
+
+      console.log(`\n[prune] Pruning snapshots older than ${retentionDays} days...`);
+
+      const result = pruneSnapshots(retentionDays);
+
+      if (result.deletedSnapshots === 0) {
+        console.log('[prune] Nothing to prune.');
+      } else {
+        console.log(
+          `[prune] Deleted ${result.deletedSnapshots} snapshot(s) ` +
+          `and ${result.deletedRows} row(s).`
+        );
+      }
+
+      console.log('[prune] Done.\n');
+    } catch (err) {
+      console.error(`[prune] Error: ${err.message}`);
       process.exitCode = 1;
     } finally {
       closeDb();

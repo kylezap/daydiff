@@ -60,9 +60,11 @@ function extractPagination(body) {
  * @param {object} headers - Extra headers
  * @param {Function|null} transform - Optional row extraction function
  * @param {string} name - Dataset name for logging
- * @returns {Promise<object[]>} All rows across all pages
+ * @returns {Promise<{rows: object[], apiTotal: number|null, warnings: string[]}>}
  */
 async function fetchAllPages(endpoint, params, headers, transform, name) {
+  const warnings = [];
+
   // ── First request: no pagination params ───────────────────────
   const body = await apiRequest(endpoint, { params, headers });
   const firstRows = extractRows(body, transform, name);
@@ -76,7 +78,7 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
   // No pagination metadata → single-page response
   if (!pag || pag.total === 0) {
     console.log(`[fetch] ${name}: ${firstRows.length} records (no pagination metadata)`);
-    return firstRows;
+    return { rows: firstRows, apiTotal: null, warnings };
   }
 
   const total = pag.total;
@@ -86,7 +88,7 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
 
   // If we already have everything, done
   if (firstRows.length >= total) {
-    return firstRows;
+    return { rows: firstRows, apiTotal: total, warnings };
   }
 
   // ── Paginate with offset ──────────────────────────────────────
@@ -115,26 +117,26 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
       iteration++;
     } catch (err) {
       // If offset param fails (e.g. API doesn't support it), accept what we have
-      console.warn(
-        `[fetch] ${name}: pagination with offset failed (${err.message}). ` +
-        `Got ${allRows.length}/${total} records.`
-      );
+      const msg = `Pagination with offset failed (${err.message}). Got ${allRows.length}/${total} records.`;
+      console.warn(`[fetch] ${name}: ${msg}`);
+      warnings.push(msg);
       break;
     }
   }
 
   if (iteration >= MAX_ITERATIONS) {
-    console.warn(`[fetch] ${name}: hit max iteration limit (${MAX_ITERATIONS})`);
+    const msg = `Hit max iteration limit (${MAX_ITERATIONS}).`;
+    console.warn(`[fetch] ${name}: ${msg}`);
+    warnings.push(msg);
   }
 
   if (allRows.length < total) {
-    console.warn(
-      `[fetch] ${name}: retrieved ${allRows.length} of ${total} total records ` +
-      `(${total - allRows.length} missing — API may not support offset pagination)`
-    );
+    const msg = `Retrieved ${allRows.length} of ${total} total records (${total - allRows.length} missing).`;
+    console.warn(`[fetch] ${name}: ${msg}`);
+    warnings.push(msg);
   }
 
-  return allRows;
+  return { rows: allRows, apiTotal: total, warnings };
 }
 
 /**
@@ -159,8 +161,14 @@ async function fetchDataset(datasetConfig, date) {
   console.log(`[fetch] Fetching dataset: ${name} from ${endpoint}`);
 
   let rows;
+  let apiTotal = null;
+  const warnings = [];
+
   if (paginated) {
-    rows = await fetchAllPages(endpoint, params, headers, transform, name);
+    const result = await fetchAllPages(endpoint, params, headers, transform, name);
+    rows = result.rows;
+    apiTotal = result.apiTotal;
+    warnings.push(...result.warnings);
   } else {
     // Single non-paginated request
     const body = await apiRequest(endpoint, { params, headers });
@@ -187,17 +195,20 @@ async function fetchDataset(datasetConfig, date) {
   const normalizedRows = Array.from(seen, ([key, data]) => ({ key, data }));
 
   if (normalizedRows.length < rows.length) {
-    console.warn(
-      `[fetch] ${name}: deduplicated ${rows.length} → ${normalizedRows.length} rows ` +
-      `(${rows.length - normalizedRows.length} duplicate keys removed)`
-    );
+    const msg = `Deduplicated ${rows.length} → ${normalizedRows.length} rows (${rows.length - normalizedRows.length} duplicate keys removed)`;
+    console.warn(`[fetch] ${name}: ${msg}`);
+    warnings.push(msg);
   }
 
   // Ensure dataset record exists in DB
   const dataset = ensureDataset(name, endpoint, rowKey, category);
 
-  // Store snapshot
-  const result = insertSnapshot(dataset.id, date, normalizedRows);
+  // Store snapshot with fetch metadata
+  const fetchWarnings = warnings.length > 0 ? warnings.join('; ') : null;
+  const result = insertSnapshot(dataset.id, date, normalizedRows, {
+    apiTotal,
+    fetchWarnings,
+  });
 
   console.log(`[fetch] ${name}: stored ${result.rowCount} rows for ${date}`);
 

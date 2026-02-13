@@ -3,7 +3,10 @@ import { ensureDataset } from '../db/index.mjs';
 import {
   getLatestSnapshot,
   getPreviousSnapshot,
-  getSnapshotRows,
+  getAddedRows,
+  getRemovedRows,
+  getModifiedRows,
+  getUnchangedCount,
   insertDiff,
 } from '../db/queries.mjs';
 
@@ -59,7 +62,6 @@ function findChangedFields(oldRow, newRow) {
 /**
  * Build a slim field-level change map for a modified row.
  * Returns { fieldName: { old: value, new: value }, ... } for only the changed fields.
- * This avoids storing the entire old and new row objects in the DB.
  */
 function buildFieldChanges(oldRow, newRow, changedFields) {
   const changes = {};
@@ -73,74 +75,79 @@ function buildFieldChanges(oldRow, newRow, changedFields) {
 }
 
 /**
- * Compute row-level diff between two snapshots.
+ * Compute diff between two snapshots using SQL-based set operations.
  *
- * Storage strategy to minimize DB size:
- *   - added:    row_data = the new row. No old_data, no field_changes.
- *   - removed:  row_data = the old row. No new_data, no field_changes.
- *   - modified: row_data = the new (current) row for display context.
- *               field_changes = { field: { old, new } } for only changed fields.
- *               No full old_data blob.
+ * Instead of loading all rows into memory, we use SQL JOINs on row_key
+ * and row_hash to identify added, removed, and modified rows.  Only the
+ * changed rows are loaded into JS — unchanged rows are counted in SQL
+ * without ever touching the JS heap.
  *
- * @param {Map<string, object>} oldRows - row_key -> row_data from previous snapshot
- * @param {Map<string, object>} newRows - row_key -> row_data from current snapshot
+ * For modified rows, we parse both old and new JSON to compute field-level
+ * changes.  Added/removed rows pass the raw JSON string through to the
+ * DB without parsing, saving both CPU and memory.
+ *
+ * @param {number} oldSnapId - Previous snapshot ID
+ * @param {number} newSnapId - Current snapshot ID
  * @returns {{ summary: object, items: Array }}
  */
-function computeDiff(oldRows, newRows) {
+function computeDiff(oldSnapId, newSnapId) {
   const items = [];
-  let added = 0;
-  let removed = 0;
-  let modified = 0;
-  let unchanged = 0;
 
-  // Check for removed and modified rows
-  for (const [key, oldData] of oldRows) {
-    if (!newRows.has(key)) {
-      removed++;
-      items.push({
-        rowKey: key,
-        changeType: 'removed',
-        rowData: oldData,
-        fieldChanges: null,
-        changedFields: null,
-      });
-    } else {
-      const newData = newRows.get(key);
-      const changedFields = findChangedFields(oldData, newData);
-
-      if (changedFields.length > 0) {
-        modified++;
-        items.push({
-          rowKey: key,
-          changeType: 'modified',
-          rowData: newData,
-          fieldChanges: buildFieldChanges(oldData, newData, changedFields),
-          changedFields,
-        });
-      } else {
-        unchanged++;
-      }
-    }
+  // 1. Added rows — in new but not in old (raw JSON pass-through)
+  const addedRows = getAddedRows(newSnapId, oldSnapId);
+  for (const row of addedRows) {
+    items.push({
+      rowKey: row.row_key,
+      changeType: 'added',
+      rowData: row.row_data,       // raw JSON string — no parse needed
+      fieldChanges: null,
+      changedFields: null,
+    });
   }
 
-  // Check for added rows
-  for (const [key, newData] of newRows) {
-    if (!oldRows.has(key)) {
-      added++;
-      items.push({
-        rowKey: key,
-        changeType: 'added',
-        rowData: newData,
-        fieldChanges: null,
-        changedFields: null,
-      });
-    }
+  // 2. Removed rows — in old but not in new (raw JSON pass-through)
+  const removedRows = getRemovedRows(oldSnapId, newSnapId);
+  for (const row of removedRows) {
+    items.push({
+      rowKey: row.row_key,
+      changeType: 'removed',
+      rowData: row.row_data,       // raw JSON string
+      fieldChanges: null,
+      changedFields: null,
+    });
   }
 
-  return {
-    summary: { added, removed, modified, unchanged },
-    items,
+  // 3. Modified rows — same key, different hash (parse for field diff)
+  const modifiedRows = getModifiedRows(oldSnapId, newSnapId);
+  for (const row of modifiedRows) {
+    const oldData = JSON.parse(row.old_data);
+    const newData = JSON.parse(row.new_data);
+    const changedFields = findChangedFields(oldData, newData);
+
+    if (changedFields.length > 0) {
+      items.push({
+        rowKey: row.row_key,
+        changeType: 'modified',
+        rowData: row.new_data,     // raw JSON string for storage
+        fieldChanges: buildFieldChanges(oldData, newData, changedFields),
+        changedFields,
+      });
+    }
+    // If hash differs but deepEqual says same (shouldn't happen with
+    // deterministic hashing, but guard against edge cases), skip it.
+  }
+
+  // 4. Unchanged count — SQL COUNT, no row data loaded
+  const unchanged = getUnchangedCount(oldSnapId, newSnapId);
+
+  const summary = {
+    added: addedRows.length,
+    removed: removedRows.length,
+    modified: items.filter(i => i.changeType === 'modified').length,
+    unchanged,
   };
+
+  return { summary, items };
 }
 
 /**
@@ -173,12 +180,8 @@ function diffDataset(datasetConfig, date) {
     `→ ${currentSnap.fetched_date} (${currentSnap.row_count} rows)`
   );
 
-  // Load rows
-  const oldRows = getSnapshotRows(previousSnap.id);
-  const newRows = getSnapshotRows(currentSnap.id);
-
-  // Compute diff
-  const { summary, items } = computeDiff(oldRows, newRows);
+  // Compute diff using SQL-based set operations (memory-efficient)
+  const { summary, items } = computeDiff(previousSnap.id, currentSnap.id);
 
   // Store diff
   const diffId = insertDiff(

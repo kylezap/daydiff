@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { readFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -65,6 +66,51 @@ export function getDb() {
       console.log('[db] Adding category column to datasets...');
       _db.exec("ALTER TABLE datasets ADD COLUMN category TEXT NOT NULL DEFAULT 'platform'");
       console.log('[db] Category column added.');
+    }
+  } catch {
+    // Table doesn't exist yet — schema.sql will create it
+  }
+
+  // Migration 3: add row_hash column to snapshot_rows + backfill existing rows
+  try {
+    const srCols = _db.pragma('table_info(snapshot_rows)').map(c => c.name);
+    if (!srCols.includes('row_hash')) {
+      console.log('[db] Adding row_hash column to snapshot_rows...');
+      _db.exec('ALTER TABLE snapshot_rows ADD COLUMN row_hash TEXT');
+      _db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_snapshot_rows_hash ON snapshot_rows(snapshot_id, row_key, row_hash)'
+      );
+
+      // Backfill hashes for existing rows
+      const nullRows = _db.prepare(
+        'SELECT id, row_data FROM snapshot_rows WHERE row_hash IS NULL'
+      ).all();
+
+      if (nullRows.length > 0) {
+        console.log(`[db] Backfilling row_hash for ${nullRows.length} existing rows...`);
+        const updateHash = _db.prepare('UPDATE snapshot_rows SET row_hash = ? WHERE id = ?');
+        const backfill = _db.transaction(() => {
+          for (const row of nullRows) {
+            const hash = createHash('sha256').update(row.row_data).digest('hex');
+            updateHash.run(hash, row.id);
+          }
+        });
+        backfill();
+        console.log('[db] Hash backfill complete.');
+      }
+    }
+  } catch {
+    // Table doesn't exist yet — schema.sql will create it
+  }
+
+  // Migration 4: add api_total and fetch_warnings columns to snapshots
+  try {
+    const snapCols = _db.pragma('table_info(snapshots)').map(c => c.name);
+    if (!snapCols.includes('api_total')) {
+      console.log('[db] Adding api_total and fetch_warnings columns to snapshots...');
+      _db.exec('ALTER TABLE snapshots ADD COLUMN api_total INTEGER');
+      _db.exec('ALTER TABLE snapshots ADD COLUMN fetch_warnings TEXT');
+      console.log('[db] Snapshot metadata columns added.');
     }
   } catch {
     // Table doesn't exist yet — schema.sql will create it

@@ -55,7 +55,7 @@ const vulnerabilityDatasets = assets.map(({ name, vulnerableId }) => ({
   endpoint: '/vulnerabilities',
   rowKey: 'id',
   paginated: true,
-  params: { vulnerableId, status: 'detected', limit: VULN_PAGE_SIZE },
+  params: { vulnerableId, limit: VULN_PAGE_SIZE },
   category: 'vulnerability',
 }));
 

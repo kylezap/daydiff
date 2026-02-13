@@ -7,6 +7,7 @@ import {
   getSummaryForDate,
   getTrend,
   getAvailableDates,
+  getPopulationTrend,
 } from '../db/queries.mjs';
 
 /**
@@ -251,6 +252,24 @@ export function setupRoutes(app) {
         category || null
       );
       res.json({ data: trend.reverse() }); // chronological order
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/population ───────────────────────────────────────
+  // Population trend: daily row_count and api_total from snapshots.
+  // Use this to detect pipeline failures (sudden drops) and data drift
+  // (api_total vs row_count mismatch).
+  app.get('/api/population', (req, res) => {
+    try {
+      const { days, dataset_id, category } = req.query;
+      const data = getPopulationTrend(
+        days ? parseInt(days, 10) : 30,
+        dataset_id ? parseInt(dataset_id, 10) : null,
+        category || null
+      );
+      res.json({ data });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

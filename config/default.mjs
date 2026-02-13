@@ -62,6 +62,11 @@ const config = {
     hour: parseInt(process.env.SCHEDULE_HOUR, 10) || 6,
     minute: parseInt(process.env.SCHEDULE_MINUTE, 10) || 0,
   },
+
+  // Data retention
+  retention: {
+    snapshotDays: parseInt(process.env.RETENTION_DAYS, 10) || 30,
+  },
 };
 
 export default config;

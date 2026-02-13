@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS snapshots (
   dataset_id INTEGER NOT NULL REFERENCES datasets(id),
   fetched_date TEXT NOT NULL,
   row_count INTEGER NOT NULL,
+  api_total INTEGER,
+  fetch_warnings TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(dataset_id, fetched_date)
 );
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS snapshot_rows (
   snapshot_id INTEGER NOT NULL REFERENCES snapshots(id),
   row_key TEXT NOT NULL,
   row_data TEXT NOT NULL,
+  row_hash TEXT,
   UNIQUE(snapshot_id, row_key)
 );
 
@@ -62,3 +65,4 @@ CREATE TABLE IF NOT EXISTS diff_items (
 CREATE INDEX IF NOT EXISTS idx_diffs_dates ON diffs(to_date, dataset_id);
 CREATE INDEX IF NOT EXISTS idx_diff_items_type ON diff_items(diff_id, change_type);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_key ON snapshot_rows(snapshot_id, row_key);
+CREATE INDEX IF NOT EXISTS idx_snapshot_rows_hash ON snapshot_rows(snapshot_id, row_key, row_hash);
