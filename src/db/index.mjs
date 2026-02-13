@@ -130,6 +130,14 @@ export function closeDb() {
 }
 
 /**
+ * Inject a database instance (for testing with in-memory DBs).
+ * @param {import('better-sqlite3').Database} db
+ */
+export function _setDbForTest(db) {
+  _db = db;
+}
+
+/**
  * Ensure a dataset record exists in the DB. Returns the dataset row.
  */
 export function ensureDataset(name, endpoint, rowKey, category = 'platform') {

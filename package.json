@@ -12,7 +12,8 @@
     "diff": "node src/cli.mjs diff",
     "dashboard": "node src/cli.mjs dashboard",
     "status": "node src/cli.mjs status",
-    "build:dashboard": "npm run build --prefix dashboard"
+    "build:dashboard": "npm run build --prefix dashboard",
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
