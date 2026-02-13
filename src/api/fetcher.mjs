@@ -91,13 +91,23 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
     return { rows: firstRows, apiTotal: total, warnings };
   }
 
-  // ── Paginate with offset ──────────────────────────────────────
+  // ── Paginate with overlapping offset ────────────────────────────
+  // TODO: Once DevGrid adds a sort parameter, pass sort=id here and
+  //       remove the overlap logic.  See README.md "Known Issues" section.
+  //
+  // The DevGrid API doesn't support sorting, so offset-based pagination
+  // is unstable — rows can shift between pages.  We overlap each page by
+  // 10% of the page size so shifted rows are still captured.  Duplicates
+  // are removed downstream by the dedup step in fetchDataset().
+  const OVERLAP_RATIO = 0.10;
+  const stride = Math.max(1, Math.floor(pageSize * (1 - OVERLAP_RATIO)));
+
   let allRows = [...firstRows];
+  let currentOffset = pageSize; // first page already covers 0..pageSize-1
   let iteration = 1;
 
-  while (allRows.length < total && iteration < MAX_ITERATIONS) {
-    const offset = allRows.length;
-    const pageParams = { ...params, offset };
+  while (currentOffset < total && iteration < MAX_ITERATIONS) {
+    const pageParams = { ...params, offset: currentOffset };
 
     try {
       const pageBody = await apiRequest(endpoint, { params: pageParams, headers });
@@ -109,11 +119,12 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
       }
 
       allRows = allRows.concat(pageRows);
-      console.log(`[fetch] ${name}: fetched ${allRows.length}/${total} records`);
+      console.log(`[fetch] ${name}: fetched ~${allRows.length}/${total} records (offset ${currentOffset})`);
 
       // If we got fewer than expected, we're done
       if (pageRows.length < pageSize) break;
 
+      currentOffset += stride;
       iteration++;
     } catch (err) {
       // If offset param fails (e.g. API doesn't support it), accept what we have
@@ -126,12 +137,6 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
 
   if (iteration >= MAX_ITERATIONS) {
     const msg = `Hit max iteration limit (${MAX_ITERATIONS}).`;
-    console.warn(`[fetch] ${name}: ${msg}`);
-    warnings.push(msg);
-  }
-
-  if (allRows.length < total) {
-    const msg = `Retrieved ${allRows.length} of ${total} total records (${total - allRows.length} missing).`;
     console.warn(`[fetch] ${name}: ${msg}`);
     warnings.push(msg);
   }
@@ -221,60 +226,55 @@ async function fetchDataset(datasetConfig, date) {
 }
 
 /**
- * Default number of datasets to fetch concurrently.
- * Each dataset still paginates sequentially, but multiple datasets run in parallel.
+ * Safely fetch a single dataset, catching and logging errors.
+ * @returns {Promise<object>} Result or error object
  */
-const CONCURRENCY = 3;
-
-/**
- * Run async tasks with a concurrency limit.
- * @param {Array<() => Promise>} tasks - Array of zero-arg async functions
- * @param {number} limit - Max concurrent tasks
- * @returns {Promise<Array>} Results in the same order as tasks
- */
-async function runWithConcurrency(tasks, limit) {
-  const results = new Array(tasks.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < tasks.length) {
-      const idx = nextIndex++;
-      results[idx] = await tasks[idx]();
-    }
+async function safeFetchDataset(ds, fetchDate) {
+  try {
+    return await fetchDataset(ds, fetchDate);
+  } catch (err) {
+    console.error(`[fetch] ERROR fetching ${ds.name}: ${err.message}`);
+    return {
+      dataset: ds.name,
+      error: err.message,
+      rowCount: 0,
+    };
   }
-
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
-  await Promise.all(workers);
-  return results;
 }
 
 /**
  * Fetch all configured datasets and store snapshots.
- * Runs up to CONCURRENCY datasets in parallel.
+ *
+ * Strategy: platform datasets first (concurrently — they're small), then
+ * vulnerability datasets one at a time to avoid overwhelming the API.
  *
  * @param {string} [date] - Override date (default: today)
  * @returns {Promise<Array<{dataset: string, rowCount: number, snapshotId: number}>>}
  */
 export async function fetchAllDatasets(date) {
   const fetchDate = date || today();
+
+  const platformDs = datasets.filter(ds => ds.category === 'platform');
+  const vulnDs = datasets.filter(ds => ds.category !== 'platform');
+
   console.log(`\n[fetch] Starting fetch for ${fetchDate}`);
-  console.log(`[fetch] ${datasets.length} dataset(s) configured, concurrency: ${CONCURRENCY}\n`);
+  console.log(`[fetch] ${datasets.length} dataset(s): ${platformDs.length} platform (parallel), ${vulnDs.length} vulnerability (sequential)\n`);
 
-  const tasks = datasets.map((ds) => async () => {
-    try {
-      return await fetchDataset(ds, fetchDate);
-    } catch (err) {
-      console.error(`[fetch] ERROR fetching ${ds.name}: ${err.message}`);
-      return {
-        dataset: ds.name,
-        error: err.message,
-        rowCount: 0,
-      };
-    }
-  });
+  // ── Phase 1: Platform datasets in parallel (small, fast) ──────
+  console.log('[fetch] Phase 1: Platform datasets...');
+  const platformResults = await Promise.all(
+    platformDs.map(ds => safeFetchDataset(ds, fetchDate))
+  );
 
-  const results = await runWithConcurrency(tasks, CONCURRENCY);
+  // ── Phase 2: Vulnerability datasets one at a time ─────────────
+  console.log('\n[fetch] Phase 2: Vulnerability datasets (sequential)...');
+  const vulnResults = [];
+  for (const ds of vulnDs) {
+    const result = await safeFetchDataset(ds, fetchDate);
+    vulnResults.push(result);
+  }
 
+  const results = [...platformResults, ...vulnResults];
   const successCount = results.filter(r => !r.error).length;
   console.log(`\n[fetch] Complete: ${successCount}/${datasets.length} datasets fetched successfully`);
 

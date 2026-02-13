@@ -17,12 +17,20 @@ import assets from './assets.mjs';
 
 // ─── Platform datasets ──────────────────────────────────────────
 
+/**
+ * Page size for platform fetches.
+ * The DevGrid default is 10, which causes 1000+ API calls for large tables.
+ * 500 is the largest value the API reliably supports.
+ */
+const PLATFORM_PAGE_SIZE = 500;
+
 const platformDatasets = [
   {
     name: 'applications',
     endpoint: '/applications',
     rowKey: 'id',
     paginated: true,
+    params: { limit: PLATFORM_PAGE_SIZE },
     category: 'platform',
   },
   {
@@ -37,6 +45,7 @@ const platformDatasets = [
     endpoint: '/repositories',
     rowKey: 'id',
     paginated: true,
+    params: { limit: PLATFORM_PAGE_SIZE },
     category: 'platform',
   },
 ];
