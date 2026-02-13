@@ -116,6 +116,34 @@ export function getDb() {
     // Table doesn't exist yet — schema.sql will create it
   }
 
+  // Migration 5: add assertion_results table
+  try {
+    const tables = _db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='assertion_results'"
+    ).get();
+    if (!tables) {
+      console.log('[db] Creating assertion_results table...');
+      _db.exec(`
+        CREATE TABLE IF NOT EXISTS assertion_results (
+          id INTEGER PRIMARY KEY,
+          assertion_id TEXT NOT NULL,
+          dataset_id INTEGER REFERENCES datasets(id),
+          checked_date TEXT NOT NULL,
+          passed INTEGER NOT NULL DEFAULT 0,
+          message TEXT,
+          details TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+      _db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_assertion_date ON assertion_results(checked_date, assertion_id)'
+      );
+      console.log('[db] assertion_results table created.');
+    }
+  } catch {
+    // Table doesn't exist yet — schema.sql will create it
+  }
+
   return _db;
 }
 

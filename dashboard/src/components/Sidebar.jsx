@@ -21,6 +21,11 @@ export default function Sidebar() {
         <NavLink to="/vulns/diff" className={linkClass}>Diff Detail</NavLink>
       </div>
 
+      <div className="sidebar-group">
+        <div className="sidebar-label">Data Quality</div>
+        <NavLink to="/quality" end className={linkClass}>Overview</NavLink>
+      </div>
+
       <style>{`
         .sidebar {
           width: 200px;

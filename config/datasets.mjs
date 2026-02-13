@@ -48,7 +48,7 @@ const platformDatasets = [
  * The DevGrid default is 10, which is very slow for 1k+ records.
  * 100 cuts API calls by 10x while staying within typical API limits.
  */
-const VULN_PAGE_SIZE = 100;
+const VULN_PAGE_SIZE = 500;
 
 const vulnerabilityDatasets = assets.map(({ name, vulnerableId }) => ({
   name: `vulns-${name}`,

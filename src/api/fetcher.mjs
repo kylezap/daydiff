@@ -13,7 +13,7 @@ function today() {
 /**
  * Maximum pages to fetch as a safety valve.
  */
-const MAX_ITERATIONS = 500;
+const MAX_ITERATIONS = 2000;
 
 /**
  * Extract rows from a response body using a transform or default logic.

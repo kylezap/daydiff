@@ -11,6 +11,7 @@ import {
   getAvailableDates,
   pruneSnapshots,
 } from './db/queries.mjs';
+import { runAssertions } from './analysis/assertions.mjs';
 import config from '../config/default.mjs';
 
 const program = new Command();
@@ -75,6 +76,19 @@ program
       const fetchFailed = fetchResults.filter(r => r.error);
 
       diffAllDatasets(opts.date);
+
+      // Run quality assertions
+      const today = opts.date || new Date().toISOString().slice(0, 10);
+      const assertionResults = runAssertions(today);
+      const failed = assertionResults.filter(r => !r.passed);
+      if (failed.length > 0) {
+        console.warn(`\n[quality] ${failed.length} assertion(s) failed:`);
+        for (const f of failed) {
+          console.warn(`  ✗ ${f.name}: ${f.message}`);
+        }
+      } else if (assertionResults.length > 0) {
+        console.log(`\n[quality] All ${assertionResults.length} assertion(s) passed`);
+      }
 
       // Auto-prune old snapshots
       const retentionDays = config.retention.snapshotDays;

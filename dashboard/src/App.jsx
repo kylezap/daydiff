@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar.jsx';
 import Overview from './pages/Overview.jsx';
 import DiffDetail from './pages/DiffDetail.jsx';
+import Quality from './pages/Quality.jsx';
 
 export default function App() {
   return (
@@ -22,6 +23,9 @@ export default function App() {
           <Route path="/vulns" element={<Overview category="vulnerability" />} />
           <Route path="/vulns/diff" element={<DiffDetail category="vulnerability" basePath="/vulns" />} />
           <Route path="/vulns/diff/:id" element={<DiffDetail category="vulnerability" basePath="/vulns" />} />
+
+          {/* Data Quality */}
+          <Route path="/quality" element={<Quality />} />
         </Routes>
       </main>
 

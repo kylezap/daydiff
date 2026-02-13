@@ -9,6 +9,14 @@ import {
   getAvailableDates,
   getPopulationTrend,
 } from '../db/queries.mjs';
+import {
+  getFlappingRows,
+  getFieldStability,
+  getSourceSegments,
+  checkReferentialIntegrity,
+  getAssertionResults,
+  getAssertionHistory,
+} from '../analysis/queries.mjs';
 
 /**
  * Set up all API routes for the dashboard.
@@ -268,6 +276,91 @@ export function setupRoutes(app) {
         days ? parseInt(days, 10) : 30,
         dataset_id ? parseInt(dataset_id, 10) : null,
         category || null
+      );
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // Quality Endpoints
+  // ═══════════════════════════════════════════════════════════════
+
+  // ─── GET /api/quality/flapping ────────────────────────────────
+  app.get('/api/quality/flapping', (req, res) => {
+    try {
+      const { dataset_id, days } = req.query;
+      const data = getFlappingRows(
+        dataset_id ? parseInt(dataset_id, 10) : null,
+        days ? parseInt(days, 10) : 7
+      );
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/quality/field-stability ─────────────────────────
+  app.get('/api/quality/field-stability', (req, res) => {
+    try {
+      const { dataset_id, days } = req.query;
+      const data = getFieldStability(
+        dataset_id ? parseInt(dataset_id, 10) : null,
+        days ? parseInt(days, 10) : 30
+      );
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/quality/source-segments ─────────────────────────
+  app.get('/api/quality/source-segments', (req, res) => {
+    try {
+      const { dataset_id, date } = req.query;
+      const data = getSourceSegments(
+        dataset_id ? parseInt(dataset_id, 10) : null,
+        date || null
+      );
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/quality/referential ─────────────────────────────
+  app.get('/api/quality/referential', (req, res) => {
+    try {
+      const { date } = req.query;
+      const data = checkReferentialIntegrity(date || null);
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/quality/assertions ──────────────────────────────
+  app.get('/api/quality/assertions', (req, res) => {
+    try {
+      const { date } = req.query;
+      const data = getAssertionResults(date || null);
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/quality/assertions/history ──────────────────────
+  app.get('/api/quality/assertions/history', (req, res) => {
+    try {
+      const { assertion_id, days } = req.query;
+      if (!assertion_id) {
+        return res.status(400).json({ error: 'assertion_id is required' });
+      }
+      const data = getAssertionHistory(
+        assertion_id,
+        days ? parseInt(days, 10) : 30
       );
       res.json({ data });
     } catch (err) {

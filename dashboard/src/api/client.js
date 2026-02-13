@@ -65,3 +65,40 @@ export async function fetchTrend(days, datasetId, category) {
   const { data } = await apiFetch(`${BASE}/trend`, { days, dataset_id: datasetId, category });
   return data;
 }
+
+// ─── Quality / Data-Quality Endpoints ─────────────────────────
+
+export async function fetchPopulation(days, datasetId, category) {
+  const { data } = await apiFetch(`${BASE}/population`, { days, dataset_id: datasetId, category });
+  return data;
+}
+
+export async function fetchFlapping(datasetId, days) {
+  const { data } = await apiFetch(`${BASE}/quality/flapping`, { dataset_id: datasetId, days });
+  return data;
+}
+
+export async function fetchFieldStability(datasetId, days) {
+  const { data } = await apiFetch(`${BASE}/quality/field-stability`, { dataset_id: datasetId, days });
+  return data;
+}
+
+export async function fetchSourceSegments(datasetId, date) {
+  const { data } = await apiFetch(`${BASE}/quality/source-segments`, { dataset_id: datasetId, date });
+  return data;
+}
+
+export async function fetchReferential(date) {
+  const { data } = await apiFetch(`${BASE}/quality/referential`, { date });
+  return data;
+}
+
+export async function fetchAssertions(date) {
+  const { data } = await apiFetch(`${BASE}/quality/assertions`, { date });
+  return data;
+}
+
+export async function fetchAssertionHistory(assertionId, days) {
+  const { data } = await apiFetch(`${BASE}/quality/assertions/history`, { assertion_id: assertionId, days });
+  return data;
+}

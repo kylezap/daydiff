@@ -62,7 +62,20 @@ CREATE TABLE IF NOT EXISTS diff_items (
   UNIQUE(diff_id, row_key)
 );
 
+-- Assertion results from automated quality checks
+CREATE TABLE IF NOT EXISTS assertion_results (
+  id INTEGER PRIMARY KEY,
+  assertion_id TEXT NOT NULL,
+  dataset_id INTEGER REFERENCES datasets(id),
+  checked_date TEXT NOT NULL,
+  passed INTEGER NOT NULL DEFAULT 0,
+  message TEXT,
+  details TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_diffs_dates ON diffs(to_date, dataset_id);
 CREATE INDEX IF NOT EXISTS idx_diff_items_type ON diff_items(diff_id, change_type);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_key ON snapshot_rows(snapshot_id, row_key);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_hash ON snapshot_rows(snapshot_id, row_key, row_hash);
+CREATE INDEX IF NOT EXISTS idx_assertion_date ON assertion_results(checked_date, assertion_id);
