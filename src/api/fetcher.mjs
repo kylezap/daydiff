@@ -2,6 +2,7 @@ import { apiRequest } from './client.mjs';
 import datasets from '../../config/datasets.mjs';
 import { ensureDataset } from '../db/index.mjs';
 import { insertSnapshot } from '../db/queries.mjs';
+import { log, warn, error } from '../lib/logger.mjs';
 
 /**
  * Get today's date as YYYY-MM-DD.
@@ -77,14 +78,14 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
 
   // No pagination metadata → single-page response
   if (!pag || pag.total === 0) {
-    console.log(`[fetch] ${name}: ${firstRows.length} records (no pagination metadata)`);
+    log(`[fetch] ${name}: ${firstRows.length} records (no pagination metadata)`);
     return { rows: firstRows, apiTotal: null, warnings };
   }
 
   const total = pag.total;
   const pageSize = pag.pageSize || firstRows.length || 100;
 
-  console.log(`[fetch] ${name}: ${total} total records, page size ${pageSize}`);
+  log(`[fetch] ${name}: ${total} total records, page size ${pageSize}`);
 
   // If we already have everything, done
   if (firstRows.length >= total) {
@@ -119,7 +120,7 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
       }
 
       allRows = allRows.concat(pageRows);
-      console.log(`[fetch] ${name}: fetched ~${allRows.length}/${total} records (offset ${currentOffset})`);
+      log(`[fetch] ${name}: fetched ~${allRows.length}/${total} records (offset ${currentOffset})`);
 
       // If we got fewer than expected, we're done
       if (pageRows.length < pageSize) break;
@@ -129,7 +130,7 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
     } catch (err) {
       // If offset param fails (e.g. API doesn't support it), accept what we have
       const msg = `Pagination with offset failed (${err.message}). Got ${allRows.length}/${total} records.`;
-      console.warn(`[fetch] ${name}: ${msg}`);
+      warn(`[fetch] ${name}: ${msg}`);
       warnings.push(msg);
       break;
     }
@@ -137,7 +138,7 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
 
   if (iteration >= MAX_ITERATIONS) {
     const msg = `Hit max iteration limit (${MAX_ITERATIONS}).`;
-    console.warn(`[fetch] ${name}: ${msg}`);
+    warn(`[fetch] ${name}: ${msg}`);
     warnings.push(msg);
   }
 
@@ -163,7 +164,7 @@ async function fetchDataset(datasetConfig, date) {
     category = 'platform',
   } = datasetConfig;
 
-  console.log(`[fetch] Fetching dataset: ${name} from ${endpoint}`);
+  log(`[fetch] Fetching dataset: ${name} from ${endpoint}`);
 
   let rows;
   let apiTotal = null;
@@ -201,7 +202,7 @@ async function fetchDataset(datasetConfig, date) {
 
   if (normalizedRows.length < rows.length) {
     const msg = `Deduplicated ${rows.length} → ${normalizedRows.length} rows (${rows.length - normalizedRows.length} duplicate keys removed)`;
-    console.warn(`[fetch] ${name}: ${msg}`);
+    warn(`[fetch] ${name}: ${msg}`);
     warnings.push(msg);
   }
 
@@ -215,7 +216,7 @@ async function fetchDataset(datasetConfig, date) {
     fetchWarnings,
   });
 
-  console.log(`[fetch] ${name}: stored ${result.rowCount} rows for ${date}`);
+  log(`[fetch] ${name}: stored ${result.rowCount} rows for ${date}`);
 
   return {
     dataset: name,
@@ -233,7 +234,7 @@ async function safeFetchDataset(ds, fetchDate) {
   try {
     return await fetchDataset(ds, fetchDate);
   } catch (err) {
-    console.error(`[fetch] ERROR fetching ${ds.name}: ${err.message}`);
+    error(`[fetch] ERROR fetching ${ds.name}: ${err.message}`);
     return {
       dataset: ds.name,
       error: err.message,
@@ -257,17 +258,17 @@ export async function fetchAllDatasets(date) {
   const platformDs = datasets.filter(ds => ds.category === 'platform');
   const vulnDs = datasets.filter(ds => ds.category !== 'platform');
 
-  console.log(`\n[fetch] Starting fetch for ${fetchDate}`);
-  console.log(`[fetch] ${datasets.length} dataset(s): ${platformDs.length} platform (parallel), ${vulnDs.length} vulnerability (sequential)\n`);
+  log(`\n[fetch] Starting fetch for ${fetchDate}`);
+  log(`[fetch] ${datasets.length} dataset(s): ${platformDs.length} platform (parallel), ${vulnDs.length} vulnerability (sequential)\n`);
 
   // ── Phase 1: Platform datasets in parallel (small, fast) ──────
-  console.log('[fetch] Phase 1: Platform datasets...');
+  log('[fetch] Phase 1: Platform datasets...');
   const platformResults = await Promise.all(
     platformDs.map(ds => safeFetchDataset(ds, fetchDate))
   );
 
   // ── Phase 2: Vulnerability datasets one at a time ─────────────
-  console.log('\n[fetch] Phase 2: Vulnerability datasets (sequential)...');
+  log('\n[fetch] Phase 2: Vulnerability datasets (sequential)...');
   const vulnResults = [];
   for (const ds of vulnDs) {
     const result = await safeFetchDataset(ds, fetchDate);
@@ -276,7 +277,7 @@ export async function fetchAllDatasets(date) {
 
   const results = [...platformResults, ...vulnResults];
   const successCount = results.filter(r => !r.error).length;
-  console.log(`\n[fetch] Complete: ${successCount}/${datasets.length} datasets fetched successfully`);
+  log(`\n[fetch] Complete: ${successCount}/${datasets.length} datasets fetched successfully`);
 
   return results;
 }

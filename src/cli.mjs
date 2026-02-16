@@ -13,6 +13,7 @@ import {
 } from './db/queries.mjs';
 import { runAssertions } from './analysis/assertions.mjs';
 import config from '../config/default.mjs';
+import { log, warn, error } from './lib/logger.mjs';
 
 const program = new Command();
 
@@ -35,7 +36,7 @@ program
         process.exitCode = 1;
       }
     } catch (err) {
-      console.error(`[fetch] Fatal error: ${err.message}`);
+      error(`[fetch] Fatal error: ${err.message}`);
       process.exitCode = 1;
     } finally {
       await closeClient();
@@ -53,7 +54,7 @@ program
     try {
       diffAllDatasets(opts.date);
     } catch (err) {
-      console.error(`[diff] Fatal error: ${err.message}`);
+      error(`[diff] Fatal error: ${err.message}`);
       process.exitCode = 1;
     } finally {
       closeDb();
@@ -68,9 +69,9 @@ program
   .option('-d, --date <date>', 'Override date (YYYY-MM-DD)', undefined)
   .action(async (opts) => {
     try {
-      console.log('═══════════════════════════════════════════');
-      console.log('  DayDiff — Daily Run');
-      console.log('═══════════════════════════════════════════');
+      log('═══════════════════════════════════════════');
+      log('  DayDiff — Daily Run');
+      log('═══════════════════════════════════════════');
 
       const fetchResults = await fetchAllDatasets(opts.date);
       const fetchFailed = fetchResults.filter(r => r.error);
@@ -82,34 +83,34 @@ program
       const assertionResults = runAssertions(today);
       const failed = assertionResults.filter(r => !r.passed);
       if (failed.length > 0) {
-        console.warn(`\n[quality] ${failed.length} assertion(s) failed:`);
+        warn(`\n[quality] ${failed.length} assertion(s) failed:`);
         for (const f of failed) {
-          console.warn(`  ✗ ${f.name}: ${f.message}`);
+          warn(`  ✗ ${f.name}: ${f.message}`);
         }
       } else if (assertionResults.length > 0) {
-        console.log(`\n[quality] All ${assertionResults.length} assertion(s) passed`);
+        log(`\n[quality] All ${assertionResults.length} assertion(s) passed`);
       }
 
       // Auto-prune old snapshots
       const retentionDays = config.retention.snapshotDays;
       const pruneResult = pruneSnapshots(retentionDays);
       if (pruneResult.deletedSnapshots > 0) {
-        console.log(
+        log(
           `\n[prune] Cleaned up ${pruneResult.deletedSnapshots} snapshot(s) ` +
           `and ${pruneResult.deletedRows} row(s) older than ${retentionDays} days`
         );
       }
 
       if (fetchFailed.length > 0) {
-        console.warn(`\n⚠  ${fetchFailed.length} dataset(s) had fetch errors`);
+        warn(`\n⚠  ${fetchFailed.length} dataset(s) had fetch errors`);
         process.exitCode = 1;
       }
 
-      console.log('\n═══════════════════════════════════════════');
-      console.log('  Run complete');
-      console.log('═══════════════════════════════════════════\n');
+      log('\n═══════════════════════════════════════════');
+      log('  Run complete');
+      log('═══════════════════════════════════════════\n');
     } catch (err) {
-      console.error(`[run] Fatal error: ${err.message}`);
+      error(`[run] Fatal error: ${err.message}`);
       process.exitCode = 1;
     } finally {
       await closeClient();
@@ -130,7 +131,7 @@ program
       const port = opts.port ? parseInt(opts.port, 10) : undefined;
       await startServer(port);
     } catch (err) {
-      console.error(`[dashboard] Fatal error: ${err.message}`);
+      error(`[dashboard] Fatal error: ${err.message}`);
       process.exitCode = 1;
     }
   });
@@ -148,42 +149,42 @@ program
       const allDatasets = listDatasets();
       const dates = getAvailableDates();
 
-      console.log('\n═══════════════════════════════════════════');
-      console.log('  DayDiff — Status');
-      console.log('═══════════════════════════════════════════\n');
+      log('\n═══════════════════════════════════════════');
+      log('  DayDiff — Status');
+      log('═══════════════════════════════════════════\n');
 
       if (allDatasets.length === 0) {
-        console.log('  No datasets have been fetched yet.');
-        console.log('  Run: node src/cli.mjs fetch\n');
+        log('  No datasets have been fetched yet.');
+        log('  Run: node src/cli.mjs fetch\n');
         return;
       }
 
-      console.log(`  Datasets: ${allDatasets.length}`);
+      log(`  Datasets: ${allDatasets.length}`);
       for (const ds of allDatasets) {
-        console.log(`    - ${ds.name} (key: ${ds.row_key})`);
+        log(`    - ${ds.name} (key: ${ds.row_key})`);
       }
 
-      console.log(`\n  Diff dates available: ${dates.length}`);
+      log(`\n  Diff dates available: ${dates.length}`);
       if (dates.length > 0) {
-        console.log(`  Latest: ${dates[0]}`);
-        console.log(`  Oldest: ${dates[dates.length - 1]}`);
+        log(`  Latest: ${dates[0]}`);
+        log(`  Oldest: ${dates[dates.length - 1]}`);
       }
 
       // Show latest diffs
       const recentDiffs = listDiffs(null, 10);
       if (recentDiffs.length > 0) {
-        console.log('\n  Recent diffs:');
+        log('\n  Recent diffs:');
         for (const d of recentDiffs) {
-          console.log(
+          log(
             `    ${d.to_date} | ${d.dataset_name} | ` +
             `+${d.added_count} -${d.removed_count} ~${d.modified_count} =${d.unchanged_count}`
           );
         }
       }
 
-      console.log('\n═══════════════════════════════════════════\n');
+      log('\n═══════════════════════════════════════════\n');
     } catch (err) {
-      console.error(`[status] Error: ${err.message}`);
+      error(`[status] Error: ${err.message}`);
       process.exitCode = 1;
     } finally {
       closeDb();
@@ -204,22 +205,22 @@ program
         ? parseInt(opts.days, 10)
         : config.retention.snapshotDays;
 
-      console.log(`\n[prune] Pruning snapshots older than ${retentionDays} days...`);
+      log(`\n[prune] Pruning snapshots older than ${retentionDays} days...`);
 
       const result = pruneSnapshots(retentionDays);
 
       if (result.deletedSnapshots === 0) {
-        console.log('[prune] Nothing to prune.');
+        log('[prune] Nothing to prune.');
       } else {
-        console.log(
+        log(
           `[prune] Deleted ${result.deletedSnapshots} snapshot(s) ` +
           `and ${result.deletedRows} row(s).`
         );
       }
 
-      console.log('[prune] Done.\n');
+      log('[prune] Done.\n');
     } catch (err) {
-      console.error(`[prune] Error: ${err.message}`);
+      error(`[prune] Error: ${err.message}`);
       process.exitCode = 1;
     } finally {
       closeDb();
@@ -236,7 +237,7 @@ program
       const { installLaunchd } = await import('./scheduler/launchd.mjs');
       installLaunchd();
     } catch (err) {
-      console.error(`[schedule] Error: ${err.message}`);
+      error(`[schedule] Error: ${err.message}`);
       process.exitCode = 1;
     }
   });

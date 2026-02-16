@@ -1,5 +1,6 @@
 import datasets from '../../config/datasets.mjs';
 import { ensureDataset } from '../db/index.mjs';
+import { log, warn, error } from '../lib/logger.mjs';
 import {
   getLatestSnapshot,
   getPreviousSnapshot,
@@ -164,18 +165,18 @@ function diffDataset(datasetConfig, date) {
   // Get the current (today's) snapshot
   const currentSnap = getLatestSnapshot(dataset.id, date);
   if (!currentSnap) {
-    console.log(`[diff] ${name}: no snapshot found for ${date}, skipping`);
+    log(`[diff] ${name}: no snapshot found for ${date}, skipping`);
     return null;
   }
 
   // Get the previous snapshot
   const previousSnap = getPreviousSnapshot(dataset.id, currentSnap.fetched_date);
   if (!previousSnap) {
-    console.log(`[diff] ${name}: no previous snapshot to compare against (first run?)`);
+    log(`[diff] ${name}: no previous snapshot to compare against (first run?)`);
     return null;
   }
 
-  console.log(
+  log(
     `[diff] ${name}: comparing ${previousSnap.fetched_date} (${previousSnap.row_count} rows) ` +
     `→ ${currentSnap.fetched_date} (${currentSnap.row_count} rows)`
   );
@@ -192,7 +193,7 @@ function diffDataset(datasetConfig, date) {
     items
   );
 
-  console.log(
+  log(
     `[diff] ${name}: +${summary.added} added, -${summary.removed} removed, ` +
     `~${summary.modified} modified, =${summary.unchanged} unchanged`
   );
@@ -215,8 +216,8 @@ function diffDataset(datasetConfig, date) {
  */
 export function diffAllDatasets(date) {
   const diffDate = date || today();
-  console.log(`\n[diff] Computing diffs for ${diffDate}`);
-  console.log(`[diff] ${datasets.length} dataset(s) configured\n`);
+  log(`\n[diff] Computing diffs for ${diffDate}`);
+  log(`[diff] ${datasets.length} dataset(s) configured\n`);
 
   const results = [];
 
@@ -227,13 +228,13 @@ export function diffAllDatasets(date) {
         results.push(result);
       }
     } catch (err) {
-      console.error(`[diff] ERROR processing ${ds.name}: ${err.message}`);
+      error(`[diff] ERROR processing ${ds.name}: ${err.message}`);
       results.push({ dataset: ds.name, error: err.message });
     }
   }
 
   const successCount = results.filter(r => !r.error && r.diffId).length;
-  console.log(`\n[diff] Complete: ${successCount} diff(s) computed`);
+  log(`\n[diff] Complete: ${successCount} diff(s) computed`);
 
   return results;
 }
