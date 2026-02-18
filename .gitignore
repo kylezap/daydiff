@@ -23,3 +23,5 @@ Thumbs.db
 .idea/
 
 openapi.yml
+
+.ipynb_checkpoints/
