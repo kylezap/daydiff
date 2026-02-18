@@ -20,8 +20,18 @@ import {
  *
  * This replicates the core logic of computeDiff + diffDataset
  * without importing private functions or coupling to config.
+ *
+ * @param {number} datasetId
+ * @param {number} oldSnapId
+ * @param {number} newSnapId
+ * @param {string} fromDate
+ * @param {string} toDate
+ * @param {object} [options] - Optional diff options
+ * @param {string[]} [options.diffIgnoreFields] - Keys to omit from field diff (e.g. identifiers, updatedAt)
  */
-function runDiffPipeline(datasetId, oldSnapId, newSnapId, fromDate, toDate) {
+function runDiffPipeline(datasetId, oldSnapId, newSnapId, fromDate, toDate, options = {}) {
+  const { diffIgnoreFields = [] } = options;
+  const excludeKeys = new Set(diffIgnoreFields);
   const items = [];
 
   // Added rows
@@ -58,6 +68,7 @@ function runDiffPipeline(datasetId, oldSnapId, newSnapId, fromDate, toDate) {
     const fieldChanges = {};
     const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
     for (const key of allKeys) {
+      if (excludeKeys.has(key)) continue;
       if (JSON.stringify(oldData[key]) !== JSON.stringify(newData[key])) {
         changedFields.push(key);
         fieldChanges[key] = { old: oldData[key] ?? null, new: newData[key] ?? null };
@@ -240,6 +251,46 @@ describe('Diff engine integration', () => {
     const fieldChanges = JSON.parse(items[0].field_changes);
     assert.deepEqual(fieldChanges.severity, { old: 'LOW', new: 'HIGH' });
     assert.deepEqual(fieldChanges.status, { old: 'detected', new: 'in_progress' });
+  });
+
+  it('does not create diff when only updatedAt changed (Applications scenario)', () => {
+    const meta = { diffIgnoreFields: ['updatedAt'] };
+    const snap1 = insertSnapshot(dataset.id, '2025-02-01', [
+      { key: 'app-1', data: { name: 'My App', updatedAt: '2025-02-01T10:00:00Z' } },
+    ], meta);
+
+    const snap2 = insertSnapshot(dataset.id, '2025-02-02', [
+      { key: 'app-1', data: { name: 'My App', updatedAt: '2025-02-02T14:30:00Z' } },
+    ], meta);
+
+    const { summary } = runDiffPipeline(
+      dataset.id, snap1.snapshotId, snap2.snapshotId,
+      '2025-02-01', '2025-02-02',
+      { diffIgnoreFields: ['updatedAt'] }
+    );
+
+    assert.equal(summary.modified, 0, 'updatedAt-only change should not produce modified');
+    assert.equal(summary.unchanged, 1, 'Row should count as unchanged');
+  });
+
+  it('does not create diff when only identifiers changed (vulnerability scenario)', () => {
+    const meta = { diffIgnoreFields: ['identifiers'] };
+    const snap1 = insertSnapshot(dataset.id, '2025-02-01', [
+      { key: 'v1', data: { name: 'CVE-2025-123', severity: 'HIGH', identifiers: [{ id: 'x', updatedAt: '2025-01-01Z' }] } },
+    ], meta);
+
+    const snap2 = insertSnapshot(dataset.id, '2025-02-02', [
+      { key: 'v1', data: { name: 'CVE-2025-123', severity: 'HIGH', identifiers: [{ id: 'x', updatedAt: '2025-02-18Z' }] } },
+    ], meta);
+
+    const { summary } = runDiffPipeline(
+      dataset.id, snap1.snapshotId, snap2.snapshotId,
+      '2025-02-01', '2025-02-02',
+      { diffIgnoreFields: ['identifiers'] }
+    );
+
+    assert.equal(summary.modified, 0, 'identifiers-only change should not produce modified');
+    assert.equal(summary.unchanged, 1, 'Row should count as unchanged');
   });
 
   it('re-running diff for same date pair replaces old results', () => {

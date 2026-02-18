@@ -14,10 +14,23 @@ function stableStringify(obj) {
 }
 
 /**
- * Compute a SHA-256 hex hash of a row's data for change detection.
+ * Omit specified keys from an object (shallow). Returns a new object.
  */
-function hashRow(data) {
-  return createHash('sha256').update(stableStringify(data)).digest('hex');
+function omitKeys(obj, keys) {
+  if (!Array.isArray(keys) || keys.length === 0) return obj;
+  const out = { ...obj };
+  for (const k of keys) delete out[k];
+  return out;
+}
+
+/**
+ * Compute a SHA-256 hex hash of a row's data for change detection.
+ * @param {object} data - Row data
+ * @param {string[]} [excludeKeys=[]] - Top-level keys to omit from hash (e.g. identifiers, updatedAt)
+ */
+function hashRow(data, excludeKeys = []) {
+  const hashable = omitKeys(data, excludeKeys);
+  return createHash('sha256').update(stableStringify(hashable)).digest('hex');
 }
 
 // ─── Snapshot Queries ────────────────────────────────────────────
@@ -30,11 +43,12 @@ function hashRow(data) {
  * @param {object} [meta] - Fetch metadata
  * @param {number} [meta.apiTotal] - Total count claimed by the API
  * @param {string} [meta.fetchWarnings] - Any warnings from the fetch
+ * @param {string[]} [meta.diffIgnoreFields] - Keys to omit from hash (noise fields per dataset)
  * @returns {{snapshotId: number, rowCount: number}}
  */
 export function insertSnapshot(datasetId, date, rows, meta = {}) {
   const db = getDb();
-  const { apiTotal = null, fetchWarnings = null } = meta;
+  const { apiTotal = null, fetchWarnings = null, diffIgnoreFields = [] } = meta;
 
   const insertSnap = db.prepare(`
     INSERT INTO snapshots (dataset_id, fetched_date, row_count, api_total, fetch_warnings)
@@ -62,7 +76,7 @@ export function insertSnapshot(datasetId, date, rows, meta = {}) {
 
     for (const row of rows) {
       const json = JSON.stringify(row.data);
-      const hash = hashRow(row.data);
+      const hash = hashRow(row.data, diffIgnoreFields);
       insertRow.run(snapshotId, String(row.key), json, hash);
     }
 

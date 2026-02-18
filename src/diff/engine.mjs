@@ -45,13 +45,18 @@ function deepEqual(a, b) {
 
 /**
  * Find which top-level fields differ between two row objects.
- * @returns {string[]} List of field names that changed
+ * @param {object} oldRow - Previous row data
+ * @param {object} newRow - Current row data
+ * @param {string[]} [excludeKeys=[]] - Keys to ignore (e.g. identifiers, updatedAt)
+ * @returns {string[]} List of field names that changed (excluding excludeKeys)
  */
-function findChangedFields(oldRow, newRow) {
+function findChangedFields(oldRow, newRow, excludeKeys = []) {
+  const exclude = new Set(excludeKeys);
   const allKeys = new Set([...Object.keys(oldRow), ...Object.keys(newRow)]);
   const changed = [];
 
   for (const key of allKeys) {
+    if (exclude.has(key)) continue;
     if (!deepEqual(oldRow[key], newRow[key])) {
       changed.push(key);
     }
@@ -89,9 +94,12 @@ function buildFieldChanges(oldRow, newRow, changedFields) {
  *
  * @param {number} oldSnapId - Previous snapshot ID
  * @param {number} newSnapId - Current snapshot ID
+ * @param {object} [options] - Diff options
+ * @param {string[]} [options.diffIgnoreFields=[]] - Keys to omit from field diff (per dataset)
  * @returns {{ summary: object, items: Array }}
  */
-function computeDiff(oldSnapId, newSnapId) {
+function computeDiff(oldSnapId, newSnapId, options = {}) {
+  const { diffIgnoreFields = [] } = options;
   const items = [];
 
   // 1. Added rows — in new but not in old (raw JSON pass-through)
@@ -123,7 +131,7 @@ function computeDiff(oldSnapId, newSnapId) {
   for (const row of modifiedRows) {
     const oldData = JSON.parse(row.old_data);
     const newData = JSON.parse(row.new_data);
-    const changedFields = findChangedFields(oldData, newData);
+    const changedFields = findChangedFields(oldData, newData, diffIgnoreFields);
 
     if (changedFields.length > 0) {
       items.push({
@@ -182,7 +190,12 @@ function diffDataset(datasetConfig, date) {
   );
 
   // Compute diff using SQL-based set operations (memory-efficient)
-  const { summary, items } = computeDiff(previousSnap.id, currentSnap.id);
+  const diffIgnoreFields = datasetConfig.diffIgnoreFields ?? [];
+  const { summary, items } = computeDiff(
+    previousSnap.id,
+    currentSnap.id,
+    { diffIgnoreFields }
+  );
 
   // Store diff
   const diffId = insertDiff(

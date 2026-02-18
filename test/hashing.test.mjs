@@ -101,4 +101,21 @@ describe('Deterministic hashing', () => {
     assert.match(row.row_hash, /^[0-9a-f]{64}$/,
       'Hash should be a 64-character hex string');
   });
+
+  it('produces same hash when only diffIgnoreFields differ', () => {
+    const meta = { diffIgnoreFields: ['updatedAt'] };
+    const rowA = { key: '1', data: { name: 'app', updatedAt: '2025-01-01T00:00:00Z' } };
+    const rowB = { key: '2', data: { name: 'app', updatedAt: '2025-02-18T12:00:00Z' } };
+
+    insertSnapshot(dataset.id, '2025-01-01', [rowA, rowB], meta);
+
+    const db = getDb();
+    const rows = db.prepare(
+      'SELECT row_key, row_hash FROM snapshot_rows ORDER BY row_key'
+    ).all();
+
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].row_hash, rows[1].row_hash,
+      'Same hash when only diffIgnoreFields (updatedAt) differs');
+  });
 });
