@@ -32,6 +32,7 @@ const platformDatasets = [
     paginated: true,
     params: { limit: PLATFORM_PAGE_SIZE },
     category: 'platform',
+    diffIgnoreFields: ['updatedAt'],
   },
   {
     name: 'Components',
@@ -68,6 +69,9 @@ const platformDatasets = [
  */
 const VULN_PAGE_SIZE = 250;
 
+/** Severity levels for partitioned fetching (smaller subsets = fewer page boundaries). */
+const VULN_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+
 const vulnerabilityDatasets = assets.map(({ name, vulnerableId }) => ({
   name: `vulns-${name}`,
   endpoint: '/vulnerabilities',
@@ -75,6 +79,9 @@ const vulnerabilityDatasets = assets.map(({ name, vulnerableId }) => ({
   paginated: true,
   params: { vulnerableId, limit: VULN_PAGE_SIZE },
   category: 'vulnerability',
+  diffIgnoreFields: ['identifiers'],
+  partitionBy: { param: 'severity', values: VULN_SEVERITIES },
+  passes: 2,
 }));
 
 // ─── Combined export ────────────────────────────────────────────
