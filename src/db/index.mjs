@@ -4,6 +4,7 @@ import { readFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import config from '../../config/default.mjs';
+import datasetConfigs from '../../config/datasets.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCHEMA_PATH = resolve(__dirname, 'schema.sql');
@@ -142,6 +143,16 @@ export function getDb() {
     }
   } catch {
     // Table doesn't exist yet — schema.sql will create it
+  }
+
+  // Migration 6: sync dataset categories from config (fixes existing DBs where vuln datasets got category='platform')
+  try {
+    const update = _db.prepare('UPDATE datasets SET category = ? WHERE name = ?');
+    for (const ds of datasetConfigs) {
+      update.run(ds.category || 'platform', ds.name);
+    }
+  } catch {
+    // Config may not be available in test env
   }
 
   return _db;

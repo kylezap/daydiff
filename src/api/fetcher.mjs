@@ -83,7 +83,14 @@ async function fetchAllPages(endpoint, params, headers, transform, name) {
   }
 
   const total = pag.total;
-  const pageSize = pag.pageSize || firstRows.length || 100;
+  // Use the smaller of: reported page size vs actual rows received.
+  // If the API returns fewer rows than requested (server cap, rate limit, etc.),
+  // we must use the actual count for offset math or we'll skip records.
+  const reportedPageSize = pag.pageSize || 100;
+  const pageSize =
+    firstRows.length > 0
+      ? Math.min(reportedPageSize, firstRows.length)
+      : reportedPageSize;
 
   log(`[fetch] ${name}: ${total} total records, page size ${pageSize}`);
 

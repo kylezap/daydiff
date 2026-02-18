@@ -22,11 +22,11 @@ import assets from './assets.mjs';
  * The DevGrid default is 10, which causes 1000+ API calls for large tables.
  * 500 is the largest value the API reliably supports.
  */
-const PLATFORM_PAGE_SIZE = 500;
+const PLATFORM_PAGE_SIZE = 200;
 
 const platformDatasets = [
   {
-    name: 'applications',
+    name: 'Applications',
     endpoint: '/applications',
     rowKey: 'id',
     paginated: true,
@@ -34,10 +34,19 @@ const platformDatasets = [
     category: 'platform',
   },
   {
-    name: 'components',
+    name: 'Components',
     endpoint: '/components',
     rowKey: 'id',
     paginated: true,
+    params: { limit: PLATFORM_PAGE_SIZE },
+    category: 'platform',
+  },
+  {
+    name: 'Resources',
+    endpoint: '/resources',
+    rowKey: 'id',
+    paginated: true,
+    params: { limit: PLATFORM_PAGE_SIZE },
     category: 'platform',
   },
   {
@@ -57,7 +66,7 @@ const platformDatasets = [
  * The DevGrid default is 10, which is very slow for 1k+ records.
  * 100 cuts API calls by 10x while staying within typical API limits.
  */
-const VULN_PAGE_SIZE = 500;
+const VULN_PAGE_SIZE = 250;
 
 const vulnerabilityDatasets = assets.map(({ name, vulnerableId }) => ({
   name: `vulns-${name}`,

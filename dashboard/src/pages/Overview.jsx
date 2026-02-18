@@ -106,6 +106,12 @@ export default function Overview({ category }) {
   }, [trend, selectedDatasetIds, datasets, hasFilter]);
 
   // Build display label for active filter
+  const totalCount = useMemo(() => {
+    return filteredSummary.reduce((sum, s) => {
+      return sum + (s.added_count || 0) + (s.removed_count || 0) + (s.modified_count || 0) + (s.unchanged_count || 0);
+    }, 0);
+  }, [filteredSummary]);
+
   const filterLabel = useMemo(() => {
     if (!hasFilter) return null;
     const names = datasets
@@ -160,6 +166,11 @@ export default function Overview({ category }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ color: '#e1e4e8', fontSize: '1.25rem', fontWeight: 600 }}>
           {TITLES[category] || 'Overview'}
+          {filteredSummary.length > 0 && (
+            <span style={{ color: '#58a6ff', fontWeight: 400, fontSize: '0.9rem', marginLeft: '0.75rem' }}>
+              — {totalCount.toLocaleString()} total
+            </span>
+          )}
           {hasFilter && (
             <span style={{ color: '#58a6ff', fontWeight: 400, fontSize: '0.9rem', marginLeft: '0.75rem' }}>
               Filtered: {filterLabel}
@@ -219,6 +230,7 @@ export default function Overview({ category }) {
                 <th style={{ ...thStyle, color: '#f85149' }}>Removed</th>
                 <th style={{ ...thStyle, color: '#e3b341' }}>Modified</th>
                 <th style={{ ...thStyle, color: '#8b949e' }}>Unchanged</th>
+                <th style={{ ...thStyle, color: '#58a6ff' }}>Total</th>
                 <th style={thStyle}></th>
               </tr>
             </thead>
@@ -255,6 +267,9 @@ export default function Overview({ category }) {
                     <td style={{ ...tdStyle, color: '#f85149', fontVariantNumeric: 'tabular-nums' }}>-{s.removed_count}</td>
                     <td style={{ ...tdStyle, color: '#e3b341', fontVariantNumeric: 'tabular-nums' }}>~{s.modified_count}</td>
                     <td style={{ ...tdStyle, color: '#8b949e', fontVariantNumeric: 'tabular-nums' }}>{s.unchanged_count}</td>
+                    <td style={{ ...tdStyle, color: '#58a6ff', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                      {(s.added_count + s.removed_count + s.modified_count + s.unchanged_count).toLocaleString()}
+                    </td>
                     <td style={tdStyle}>
                       <button
                         onClick={() => navigate(`${basePath}/diff/${s.diff_id}`)}

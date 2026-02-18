@@ -159,8 +159,8 @@ function computeDiff(oldSnapId, newSnapId) {
  * @returns {{ dataset: string, diffId: number, summary: object } | null}
  */
 function diffDataset(datasetConfig, date) {
-  const { name, endpoint, rowKey } = datasetConfig;
-  const dataset = ensureDataset(name, endpoint, rowKey);
+  const { name, endpoint, rowKey, category = 'platform' } = datasetConfig;
+  const dataset = ensureDataset(name, endpoint, rowKey, category);
 
   // Get the current (today's) snapshot
   const currentSnap = getLatestSnapshot(dataset.id, date);

@@ -16,6 +16,7 @@ import {
   checkReferentialIntegrity,
   getAssertionResults,
   getAssertionHistory,
+  getAssertionSummary,
 } from '../analysis/queries.mjs';
 
 /**
@@ -290,10 +291,11 @@ export function setupRoutes(app) {
   // ─── GET /api/quality/flapping ────────────────────────────────
   app.get('/api/quality/flapping', (req, res) => {
     try {
-      const { dataset_id, days } = req.query;
+      const { dataset_id, days, category } = req.query;
       const data = getFlappingRows(
         dataset_id ? parseInt(dataset_id, 10) : null,
-        days ? parseInt(days, 10) : 7
+        days ? parseInt(days, 10) : 7,
+        category || null
       );
       res.json({ data });
     } catch (err) {
@@ -304,10 +306,11 @@ export function setupRoutes(app) {
   // ─── GET /api/quality/field-stability ─────────────────────────
   app.get('/api/quality/field-stability', (req, res) => {
     try {
-      const { dataset_id, days } = req.query;
+      const { dataset_id, days, category } = req.query;
       const data = getFieldStability(
         dataset_id ? parseInt(dataset_id, 10) : null,
-        days ? parseInt(days, 10) : 30
+        days ? parseInt(days, 10) : 30,
+        category || null
       );
       res.json({ data });
     } catch (err) {
@@ -318,10 +321,11 @@ export function setupRoutes(app) {
   // ─── GET /api/quality/source-segments ─────────────────────────
   app.get('/api/quality/source-segments', (req, res) => {
     try {
-      const { dataset_id, date } = req.query;
+      const { dataset_id, date, category } = req.query;
       const data = getSourceSegments(
         dataset_id ? parseInt(dataset_id, 10) : null,
-        date || null
+        date || null,
+        category || null
       );
       res.json({ data });
     } catch (err) {
@@ -345,6 +349,17 @@ export function setupRoutes(app) {
     try {
       const { date } = req.query;
       const data = getAssertionResults(date || null);
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/quality/assertions/summary ────────────────────────
+  app.get('/api/quality/assertions/summary', (req, res) => {
+    try {
+      const { days } = req.query;
+      const data = getAssertionSummary(days ? parseInt(days, 10) : 30);
       res.json({ data });
     } catch (err) {
       res.status(500).json({ error: err.message });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ReferenceDot,
 } from 'recharts';
@@ -11,12 +11,15 @@ import {
   fetchSourceSegments,
   fetchReferential,
   fetchAssertions,
+  fetchAssertionHistory,
+  fetchAssertionSummary,
   fetchDatasets,
 } from '../api/client.js';
 
 // ─── Main Page ───────────────────────────────────────────────────
 
 export default function Quality() {
+  const [category, setCategory] = useState('platform'); // 'platform' | 'vulnerability' | ''
   const [datasets, setDatasets] = useState([]);
   const [selectedDatasetId, setSelectedDatasetId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -24,33 +27,43 @@ export default function Quality() {
 
   // Panel data
   const [assertions, setAssertions] = useState([]);
+  const [assertionSummary, setAssertionSummary] = useState([]);
   const [population, setPopulation] = useState([]);
   const [flapping, setFlapping] = useState([]);
   const [fieldStability, setFieldStability] = useState([]);
   const [sourceSegments, setSourceSegments] = useState([]);
   const [referential, setReferential] = useState([]);
 
-  // Load datasets on mount
-  useEffect(() => {
-    fetchDatasets().then(setDatasets).catch(err => setError(err.message));
-  }, []);
+  const catParam = category || undefined; // '' means all
 
-  // Load all quality data
+  // Load datasets when category changes (scoped to platform/vuln when selected)
+  useEffect(() => {
+    fetchDatasets(catParam).then(setDatasets).catch(err => setError(err.message));
+  }, [catParam]);
+
+  // Reset dataset selection when category changes
+  useEffect(() => {
+    setSelectedDatasetId('');
+  }, [category]);
+
+  // Load all quality data (scoped by category)
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
         setError(null);
         const dsId = selectedDatasetId || undefined;
-        const [aRes, popRes, flapRes, fsRes, srcRes, refRes] = await Promise.all([
+        const [aRes, aSumRes, popRes, flapRes, fsRes, srcRes, refRes] = await Promise.all([
           fetchAssertions().catch(() => []),
-          fetchPopulation(30, dsId).catch(() => []),
-          fetchFlapping(dsId, 7).catch(() => []),
-          fetchFieldStability(dsId, 30).catch(() => []),
-          fetchSourceSegments(dsId).catch(() => []),
+          fetchAssertionSummary(30).catch(() => []),
+          fetchPopulation(30, dsId, catParam).catch(() => []),
+          fetchFlapping(dsId, 7, catParam).catch(() => []),
+          fetchFieldStability(dsId, 30, catParam).catch(() => []),
+          fetchSourceSegments(dsId, undefined, catParam).catch(() => []),
           fetchReferential().catch(() => []),
         ]);
         setAssertions(aRes);
+        setAssertionSummary(aSumRes);
         setPopulation(popRes);
         setFlapping(flapRes);
         setFieldStability(fsRes);
@@ -63,7 +76,7 @@ export default function Quality() {
       }
     }
     load();
-  }, [selectedDatasetId]);
+  }, [selectedDatasetId, catParam]);
 
   if (error && !loading) {
     return (
@@ -76,21 +89,36 @@ export default function Quality() {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <h2 style={headerStyle}>Data Quality</h2>
-        <select
-          value={selectedDatasetId}
-          onChange={e => setSelectedDatasetId(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="">All Datasets</option>
-          {datasets.map(ds => (
-            <option key={ds.id} value={ds.id}>{ds.name}</option>
-          ))}
-        </select>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            style={selectStyle}
+            title="Filter quality data by dataset category"
+          >
+            <option value="platform">Platform</option>
+            <option value="vulnerability">Vulnerabilities</option>
+            <option value="">All</option>
+          </select>
+          <select
+            value={selectedDatasetId}
+            onChange={e => setSelectedDatasetId(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">All Datasets</option>
+            {datasets.map(ds => (
+              <option key={ds.id} value={ds.id}>{ds.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading && <div style={{ color: '#8b949e', padding: '1rem' }}>Loading quality data...</div>}
+
+      {/* 0. Assertion Summary */}
+      <AssertionSummaryPanel data={assertionSummary} />
 
       {/* 1. Assertion Results Strip */}
       <AssertionStrip assertions={assertions} />
@@ -121,6 +149,38 @@ export default function Quality() {
 
 // ─── Panel Components ────────────────────────────────────────────
 
+function AssertionSummaryPanel({ data }) {
+  const chartData = React.useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return data.map(d => ({
+      date: d.date,
+      passed: d.passed,
+      failed: d.failed,
+    }));
+  }, [data]);
+
+  return (
+    <div style={{ ...panelStyle, marginBottom: '1rem' }}>
+      <h3 style={panelTitle}>Assertion Pass Rate <span style={subtitleStyle}>(last 30 days)</span></h3>
+      {chartData.length === 0 ? (
+        <div style={emptyText}>No assertion history yet. Run <code style={codeStyle}>node src/cli.mjs run</code> to generate.</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+            <XAxis dataKey="date" tick={{ fill: '#8b949e', fontSize: 11 }} />
+            <YAxis tick={{ fill: '#8b949e', fontSize: 11 }} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Legend />
+            <Bar dataKey="passed" stackId="a" fill="#3fb950" name="Passed" radius={[0, 0, 4, 4]} />
+            <Bar dataKey="failed" stackId="a" fill="#f85149" name="Failed" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
 function AssertionStrip({ assertions }) {
   if (!assertions || assertions.length === 0) {
     return (
@@ -143,6 +203,92 @@ function AssertionStrip({ assertions }) {
   );
 }
 
+function AssertionHistoryChart({ assertionId, days = 14 }) {
+  const [data, setData] = useState([]);
+  useEffect(() => {
+    fetchAssertionHistory(assertionId, days)
+      .then(setData)
+      .catch(() => setData([]));
+  }, [assertionId, days]);
+
+  if (!data.length) return null;
+  const chartData = data
+    .map(r => ({
+      date: r.checked_date,
+      passed: r.passed ? 1 : 0,
+    }))
+    .reverse();
+
+  return (
+    <div style={{ marginTop: '0.5rem', marginLeft: '-0.25rem' }}>
+      <ResponsiveContainer width="100%" height={60}>
+        <LineChart data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+          <XAxis dataKey="date" hide />
+          <YAxis domain={[0, 1]} width={28} tick={{ fill: '#8b949e', fontSize: 9 }} tickFormatter={v => (v ? 'pass' : 'fail')} />
+          <Tooltip contentStyle={tooltipStyle} formatter={([val]) => [val ? 'pass' : 'fail', '']} labelFormatter={d => d} />
+          <Line type="stepAfter" dataKey="passed" stroke="#3fb950" strokeWidth={2} dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function AssertionDetailsChart({ assertionId, details }) {
+  let parsed = [];
+  try {
+    parsed = typeof details === 'string' ? JSON.parse(details) : details;
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+  if (assertionId === 'population-drop') {
+    const chartData = parsed.map(d => ({
+      name: d.dataset,
+      'Drop %': parseFloat(d.dropPercent) || 0,
+    }));
+    return (
+      <div style={{ marginTop: '0.5rem', height: Math.max(120, chartData.length * 24) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} layout="vertical" margin={{ left: 60 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+            <XAxis type="number" tick={{ fill: '#8b949e', fontSize: 10 }} unit="%" />
+            <YAxis dataKey="name" type="category" tick={{ fill: '#8b949e', fontSize: 10 }} width={55} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Bar dataKey="Drop %" fill="#f85149" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  if (assertionId === 'fetch-complete') {
+    const chartData = parsed.map(d => ({
+      name: d.dataset,
+      fetched: d.row_count ?? 0,
+      expected: d.api_total ?? 0,
+    }));
+    return (
+      <div style={{ marginTop: '0.5rem', height: Math.max(120, chartData.length * 24) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} layout="vertical" margin={{ left: 60 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+            <XAxis type="number" tick={{ fill: '#8b949e', fontSize: 10 }} />
+            <YAxis dataKey="name" type="category" tick={{ fill: '#8b949e', fontSize: 10 }} width={55} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Legend />
+            <Bar dataKey="fetched" fill="#58a6ff" name="Fetched" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="expected" fill="#e3b341" name="API Total" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function AssertionCard({ assertion }) {
   const [expanded, setExpanded] = useState(false);
   const passed = assertion.passed === 1 || assertion.passed === true;
@@ -154,6 +300,7 @@ function AssertionCard({ assertion }) {
         ...cardStyle,
         borderColor: passed ? '#238636' : '#da3633',
         cursor: 'pointer',
+        minWidth: 200,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -172,6 +319,16 @@ function AssertionCard({ assertion }) {
       {expanded && assertion.message && (
         <div style={{ color: '#8b949e', fontSize: '0.75rem', marginTop: '0.4rem', lineHeight: 1.35 }}>
           {assertion.message}
+        </div>
+      )}
+      {expanded && !passed && assertion.details && (
+        <div onClick={e => e.stopPropagation()} style={{ marginTop: '0.5rem' }}>
+          <AssertionDetailsChart assertionId={assertion.assertion_id} details={assertion.details} />
+        </div>
+      )}
+      {expanded && (
+        <div onClick={e => e.stopPropagation()} style={{ marginTop: '0.5rem' }}>
+          <AssertionHistoryChart assertionId={assertion.assertion_id} days={14} />
         </div>
       )}
     </div>

@@ -73,18 +73,18 @@ export async function fetchPopulation(days, datasetId, category) {
   return data;
 }
 
-export async function fetchFlapping(datasetId, days) {
-  const { data } = await apiFetch(`${BASE}/quality/flapping`, { dataset_id: datasetId, days });
+export async function fetchFlapping(datasetId, days, category) {
+  const { data } = await apiFetch(`${BASE}/quality/flapping`, { dataset_id: datasetId, days, category });
   return data;
 }
 
-export async function fetchFieldStability(datasetId, days) {
-  const { data } = await apiFetch(`${BASE}/quality/field-stability`, { dataset_id: datasetId, days });
+export async function fetchFieldStability(datasetId, days, category) {
+  const { data } = await apiFetch(`${BASE}/quality/field-stability`, { dataset_id: datasetId, days, category });
   return data;
 }
 
-export async function fetchSourceSegments(datasetId, date) {
-  const { data } = await apiFetch(`${BASE}/quality/source-segments`, { dataset_id: datasetId, date });
+export async function fetchSourceSegments(datasetId, date, category) {
+  const { data } = await apiFetch(`${BASE}/quality/source-segments`, { dataset_id: datasetId, date, category });
   return data;
 }
 
@@ -100,5 +100,10 @@ export async function fetchAssertions(date) {
 
 export async function fetchAssertionHistory(assertionId, days) {
   const { data } = await apiFetch(`${BASE}/quality/assertions/history`, { assertion_id: assertionId, days });
+  return data;
+}
+
+export async function fetchAssertionSummary(days) {
+  const { data } = await apiFetch(`${BASE}/quality/assertions/summary`, { days });
   return data;
 }

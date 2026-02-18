@@ -10,7 +10,7 @@ import { getDb } from '../db/index.mjs';
  * @param {number} windowDays - How many days to look back
  * @returns {Array<{row_key: string, dataset_name: string, flap_count: number, transitions: string}>}
  */
-export function getFlappingRows(datasetId = null, windowDays = 7) {
+export function getFlappingRows(datasetId = null, windowDays = 7, category = null) {
   const db = getDb();
 
   const cutoff = new Date();
@@ -23,6 +23,10 @@ export function getFlappingRows(datasetId = null, windowDays = 7) {
   if (datasetId) {
     conditions.push('d.dataset_id = ?');
     params.push(datasetId);
+  }
+  if (category) {
+    conditions.push('ds.category = ?');
+    params.push(category);
   }
 
   const where = conditions.join(' AND ');
@@ -57,7 +61,7 @@ export function getFlappingRows(datasetId = null, windowDays = 7) {
  * @param {number} days - How many days to look back
  * @returns {Array<{field_name: string, change_count: number, dataset_name: string}>}
  */
-export function getFieldStability(datasetId = null, days = 30) {
+export function getFieldStability(datasetId = null, days = 30, category = null) {
   const db = getDb();
 
   const cutoff = new Date();
@@ -70,6 +74,10 @@ export function getFieldStability(datasetId = null, days = 30) {
   if (datasetId) {
     conditions.push('d.dataset_id = ?');
     params.push(datasetId);
+  }
+  if (category) {
+    conditions.push('ds.category = ?');
+    params.push(category);
   }
 
   const where = conditions.join(' AND ');
@@ -101,7 +109,7 @@ export function getFieldStability(datasetId = null, days = 30) {
  * @param {string|null} date - Specific date (null = latest)
  * @returns {Array<{source: string, scan_type: string, change_type: string, cnt: number}>}
  */
-export function getSourceSegments(datasetId = null, date = null) {
+export function getSourceSegments(datasetId = null, date = null, category = null) {
   const db = getDb();
 
   const conditions = [];
@@ -118,9 +126,12 @@ export function getSourceSegments(datasetId = null, date = null) {
     // Default to the latest date
     conditions.push('d.to_date = (SELECT MAX(to_date) FROM diffs)');
   }
-
-  // Only meaningful for vulnerability datasets
-  conditions.push("ds.category = 'vulnerability'");
+  // Only meaningful for vulnerability datasets; when category=platform, return empty
+  if (category === 'platform') {
+    conditions.push('1 = 0'); // no rows for platform
+  } else {
+    conditions.push("ds.category = 'vulnerability'");
+  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -282,6 +293,28 @@ export function getAssertionHistory(assertionId, days = 30) {
     WHERE assertion_id = ? AND checked_date >= ?
     ORDER BY checked_date DESC
   `).all(assertionId, cutoffDate);
+}
+
+/**
+ * Get assertion summary (passed/failed counts per date) for overview chart.
+ */
+export function getAssertionSummary(days = 30) {
+  const db = getDb();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  return db.prepare(`
+    SELECT
+      checked_date AS date,
+      SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) AS passed,
+      SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) AS failed,
+      COUNT(*) AS total
+    FROM assertion_results
+    WHERE checked_date >= ?
+    GROUP BY checked_date
+    ORDER BY checked_date
+  `).all(cutoffDate);
 }
 
 /**

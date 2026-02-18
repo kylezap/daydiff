@@ -186,6 +186,9 @@ export default function DiffDetail({ category, basePath = '/platform' }) {
           marginBottom: '0.5rem',
           fontSize: '0.85rem',
         }}>
+          <span style={{ color: '#58a6ff', fontWeight: 600 }}>
+            {(diff.added_count + diff.removed_count + diff.modified_count + diff.unchanged_count).toLocaleString()} total
+          </span>
           <span style={{ color: '#3fb950' }}>+{diff.added_count} added</span>
           <span style={{ color: '#f85149' }}>-{diff.removed_count} removed</span>
           <span style={{ color: '#e3b341' }}>~{diff.modified_count} modified</span>
