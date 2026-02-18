@@ -29,8 +29,8 @@ export function ChangeDistributionChart({ summary }) {
   }));
 
   return (
-    <div style={{ width: '100%', height: 280 }}>
-      <ResponsiveContainer>
+    <div style={{ width: '100%', height: 280, minWidth: 0 }}>
+      <ResponsiveContainer initialDimension={{ width: 400, height: 280 }}>
         <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
           <XAxis dataKey="name" tick={{ fill: '#8b949e', fontSize: 12 }} />
@@ -57,8 +57,8 @@ export function TrendChart({ trend }) {
   }));
 
   return (
-    <div style={{ width: '100%', height: 280 }}>
-      <ResponsiveContainer>
+    <div style={{ width: '100%', height: 280, minWidth: 0 }}>
+      <ResponsiveContainer initialDimension={{ width: 400, height: 280 }}>
         <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
           <XAxis dataKey="date" tick={{ fill: '#8b949e', fontSize: 11 }} />

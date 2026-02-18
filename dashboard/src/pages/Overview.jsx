@@ -33,14 +33,17 @@ export default function Overview({ category }) {
 
   // Load initial data (scoped to category)
   useEffect(() => {
+    const ac = new AbortController();
+    let cancelled = false;
     async function load() {
       try {
         setLoading(true);
         setError(null);
         const [dateList, ds] = await Promise.all([
-          fetchDates(category),
-          fetchDatasets(category),
+          fetchDates(category, { signal: ac.signal }),
+          fetchDatasets(category, { signal: ac.signal }),
         ]);
+        if (cancelled) return;
         setDates(dateList);
         setDatasets(ds);
         if (dateList.length > 0) {
@@ -52,32 +55,38 @@ export default function Overview({ category }) {
           setDiffs([]);
         }
       } catch (err) {
+        if (cancelled || err.name === 'AbortError') return;
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+    return () => { cancelled = true; ac.abort(); };
   }, [category]);
 
   // Load data for selected date (scoped to category)
   useEffect(() => {
     if (!selectedDate) return;
+    const ac = new AbortController();
+    let cancelled = false;
     async function loadDate() {
       try {
         const [summaryResult, trendData, diffList] = await Promise.all([
-          fetchSummary(selectedDate, category),
-          fetchTrend(30, null, category),
-          fetchDiffs(null, 90, category),
+          fetchSummary(selectedDate, category, { signal: ac.signal }),
+          fetchTrend(30, null, category, { signal: ac.signal }),
+          fetchDiffs(null, 90, category, { signal: ac.signal }),
         ]);
+        if (cancelled) return;
         setSummary(summaryResult.data || []);
         setTrend(trendData);
         setDiffs(diffList);
       } catch (err) {
-        setError(err.message);
+        if (!cancelled && err.name !== 'AbortError') setError(err.message);
       }
     }
     loadDate();
+    return () => { cancelled = true; ac.abort(); };
   }, [selectedDate, category]);
 
   const hasFilter = selectedDatasetIds.size > 0;

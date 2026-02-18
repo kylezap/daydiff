@@ -1,6 +1,6 @@
 const BASE = '/api';
 
-async function apiFetch(path, params = {}) {
+async function apiFetch(path, params = {}, options = {}) {
   const url = new URL(path, window.location.origin);
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== '') {
@@ -8,7 +8,8 @@ async function apiFetch(path, params = {}) {
     }
   }
 
-  const res = await fetch(url.toString());
+  const fetchOpts = options.signal ? { signal: options.signal } : {};
+  const res = await fetch(url.toString(), fetchOpts);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `API error: ${res.status}`);
@@ -16,18 +17,18 @@ async function apiFetch(path, params = {}) {
   return res.json();
 }
 
-export async function fetchDatasets(category) {
-  const { data } = await apiFetch(`${BASE}/datasets`, { category });
+export async function fetchDatasets(category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/datasets`, { category }, options);
   return data;
 }
 
-export async function fetchDates(category) {
-  const { data } = await apiFetch(`${BASE}/dates`, { category });
+export async function fetchDates(category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/dates`, { category }, options);
   return data;
 }
 
-export async function fetchDiffs(datasetId, limit, category) {
-  const { data } = await apiFetch(`${BASE}/diffs`, { dataset_id: datasetId, limit, category });
+export async function fetchDiffs(datasetId, limit, category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/diffs`, { dataset_id: datasetId, limit, category }, options);
   return data;
 }
 
@@ -56,13 +57,13 @@ export async function fetchDiffItemsPage(id, { offset = 0, limit = 100, changeTy
   });
 }
 
-export async function fetchSummary(date, category) {
-  const result = await apiFetch(`${BASE}/summary`, { date, category });
+export async function fetchSummary(date, category, options = {}) {
+  const result = await apiFetch(`${BASE}/summary`, { date, category }, options);
   return result;
 }
 
-export async function fetchTrend(days, datasetId, category) {
-  const { data } = await apiFetch(`${BASE}/trend`, { days, dataset_id: datasetId, category });
+export async function fetchTrend(days, datasetId, category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/trend`, { days, dataset_id: datasetId, category }, options);
   return data;
 }
 

@@ -48,6 +48,7 @@ export default function Quality() {
 
   // Load all quality data (scoped by category)
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         setLoading(true);
@@ -62,20 +63,23 @@ export default function Quality() {
           fetchSourceSegments(dsId, undefined, catParam).catch(() => []),
           fetchReferential().catch(() => []),
         ]);
-        setAssertions(aRes);
-        setAssertionSummary(aSumRes);
-        setPopulation(popRes);
-        setFlapping(flapRes);
-        setFieldStability(fsRes);
-        setSourceSegments(srcRes);
-        setReferential(refRes);
+        if (!cancelled) {
+          setAssertions(aRes);
+          setAssertionSummary(aSumRes);
+          setPopulation(popRes);
+          setFlapping(flapRes);
+          setFieldStability(fsRes);
+          setSourceSegments(srcRes);
+          setReferential(refRes);
+        }
       } catch (err) {
-        setError(err.message);
+        if (!cancelled) setError(err.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+    return () => { cancelled = true; };
   }, [selectedDatasetId, catParam]);
 
   if (error && !loading) {
@@ -87,7 +91,7 @@ export default function Quality() {
   }
 
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <h2 style={headerStyle}>Data Quality</h2>
@@ -129,19 +133,19 @@ export default function Quality() {
       {/* Charts row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
         {/* 3. Flapping Records */}
-        <FlappingPanel data={flapping} />
+        <div style={{ minWidth: 0 }}><FlappingPanel data={flapping} /></div>
 
         {/* 4. Field Stability */}
-        <FieldStabilityPanel data={fieldStability} />
+        <div style={{ minWidth: 0 }}><FieldStabilityPanel data={fieldStability} /></div>
       </div>
 
       {/* Bottom row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
         {/* 5. Source Segmentation */}
-        <SourceSegmentPanel data={sourceSegments} />
+        <div style={{ minWidth: 0 }}><SourceSegmentPanel data={sourceSegments} /></div>
 
         {/* 6. Referential Integrity */}
-        <ReferentialPanel data={referential} />
+        <div style={{ minWidth: 0 }}><ReferentialPanel data={referential} /></div>
       </div>
     </div>
   );
@@ -165,8 +169,9 @@ function AssertionSummaryPanel({ data }) {
       {chartData.length === 0 ? (
         <div style={emptyText}>No assertion history yet. Run <code style={codeStyle}>node src/cli.mjs run</code> to generate.</div>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData}>
+        <div style={{ minWidth: 0, height: 200 }}>
+          <ResponsiveContainer width="100%" height={200} initialDimension={{ width: 400, height: 200 }}>
+            <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
             <XAxis dataKey="date" tick={{ fill: '#8b949e', fontSize: 11 }} />
             <YAxis tick={{ fill: '#8b949e', fontSize: 11 }} />
@@ -175,7 +180,8 @@ function AssertionSummaryPanel({ data }) {
             <Bar dataKey="passed" stackId="a" fill="#3fb950" name="Passed" radius={[0, 0, 4, 4]} />
             <Bar dataKey="failed" stackId="a" fill="#f85149" name="Failed" radius={[4, 4, 0, 0]} />
           </BarChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
@@ -206,9 +212,11 @@ function AssertionStrip({ assertions }) {
 function AssertionHistoryChart({ assertionId, days = 14 }) {
   const [data, setData] = useState([]);
   useEffect(() => {
+    let cancelled = false;
     fetchAssertionHistory(assertionId, days)
-      .then(setData)
-      .catch(() => setData([]));
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData([]); });
+    return () => { cancelled = true; };
   }, [assertionId, days]);
 
   if (!data.length) return null;
@@ -220,8 +228,8 @@ function AssertionHistoryChart({ assertionId, days = 14 }) {
     .reverse();
 
   return (
-    <div style={{ marginTop: '0.5rem', marginLeft: '-0.25rem' }}>
-      <ResponsiveContainer width="100%" height={60}>
+    <div style={{ marginTop: '0.5rem', marginLeft: '-0.25rem', minWidth: 0, height: 60 }}>
+      <ResponsiveContainer width="100%" height={60} initialDimension={{ width: 200, height: 60 }}>
         <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
           <XAxis dataKey="date" hide />
@@ -249,8 +257,8 @@ function AssertionDetailsChart({ assertionId, details }) {
       'Drop %': parseFloat(d.dropPercent) || 0,
     }));
     return (
-      <div style={{ marginTop: '0.5rem', height: Math.max(120, chartData.length * 24) }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div style={{ marginTop: '0.5rem', height: Math.max(120, chartData.length * 24), minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 120 }}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
             <XAxis type="number" tick={{ fill: '#8b949e', fontSize: 10 }} unit="%" />
@@ -270,8 +278,8 @@ function AssertionDetailsChart({ assertionId, details }) {
       expected: d.api_total ?? 0,
     }));
     return (
-      <div style={{ marginTop: '0.5rem', height: Math.max(120, chartData.length * 24) }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div style={{ marginTop: '0.5rem', height: Math.max(120, chartData.length * 24), minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 120 }}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
             <XAxis type="number" tick={{ fill: '#8b949e', fontSize: 10 }} />
@@ -360,8 +368,9 @@ function PopulationPanel({ data }) {
       {chartData.length === 0 ? (
         <div style={emptyText}>No population data available</div>
       ) : (
-        <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={chartData}>
+        <div style={{ minWidth: 0, height: 250 }}>
+          <ResponsiveContainer width="100%" height={250} initialDimension={{ width: 500, height: 250 }}>
+            <AreaChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
             <XAxis dataKey="date" tick={{ fill: '#8b949e', fontSize: 11 }} />
             <YAxis tick={{ fill: '#8b949e', fontSize: 11 }} />
@@ -393,7 +402,8 @@ function PopulationPanel({ data }) {
               />
             ))}
           </AreaChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
@@ -448,7 +458,8 @@ function FieldStabilityPanel({ data }) {
       {chartData.length === 0 ? (
         <div style={emptyText}>No field-level changes detected</div>
       ) : (
-        <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 28)}>
+        <div style={{ minWidth: 0, minHeight: 200 }}>
+          <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 28)} initialDimension={{ width: 400, height: 200 }}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 80 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
             <XAxis type="number" tick={{ fill: '#8b949e', fontSize: 11 }} />
@@ -456,7 +467,8 @@ function FieldStabilityPanel({ data }) {
             <Tooltip contentStyle={tooltipStyle} />
             <Bar dataKey="changes" fill="#58a6ff" radius={[0, 4, 4, 0]} />
           </BarChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
@@ -483,7 +495,8 @@ function SourceSegmentPanel({ data }) {
       {chartData.length === 0 ? (
         <div style={emptyText}>No source segment data available</div>
       ) : (
-        <ResponsiveContainer width="100%" height={250}>
+        <div style={{ minWidth: 0, height: 250 }}>
+          <ResponsiveContainer width="100%" height={250} initialDimension={{ width: 500, height: 250 }}>
           <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
             <XAxis dataKey="source" tick={{ fill: '#8b949e', fontSize: 10 }} />
@@ -494,7 +507,8 @@ function SourceSegmentPanel({ data }) {
             <Bar dataKey="removed" stackId="a" fill="#f85149" name="Removed" />
             <Bar dataKey="modified" stackId="a" fill="#e3b341" name="Modified" />
           </BarChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
