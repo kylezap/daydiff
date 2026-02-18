@@ -21,6 +21,17 @@ npm start
 npm run dashboard
 ```
 
+## Dashboard Development
+
+For local development with hot reload (Vite on port 5173, API proxied from port 3000):
+
+```bash
+# From project root — runs backend + Vite dev server together
+npm run dev
+```
+
+Then open http://localhost:5173. The frontend proxies `/api` to the backend on port 3000.
+
 ## CLI Commands
 
 ```bash
