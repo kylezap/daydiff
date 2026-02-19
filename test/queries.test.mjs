@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { setupTestDb } from './helpers.mjs';
 import {
   insertSnapshot,
+  createEmptySnapshot,
+  insertSnapshotRowsBatch,
+  finalizeSnapshot,
+  getSnapshotRowCount,
   getLatestSnapshot,
   getPreviousSnapshot,
   getAddedRows,
@@ -52,6 +56,35 @@ describe('Snapshot queries', () => {
       assert.ok(row.row_hash, 'Every row should have a hash');
       assert.match(row.row_hash, /^[0-9a-f]{64}$/);
     }
+  });
+
+  it('streaming insert (createEmptySnapshot + insertSnapshotRowsBatch + finalizeSnapshot) stores rows correctly', () => {
+    const snapshotId = createEmptySnapshot(dataset.id, '2025-01-15');
+
+    insertSnapshotRowsBatch(snapshotId, [
+      { id: 'r1', name: 'alpha' },
+      { id: 'r2', name: 'beta' },
+    ], 'id', []);
+
+    insertSnapshotRowsBatch(snapshotId, [
+      { id: 'r3', name: 'gamma' },
+      { id: 'r2', name: 'beta-updated' },
+    ], 'id', []);
+
+    const { rowCount } = finalizeSnapshot(snapshotId, 4, 'streamed');
+
+    assert.equal(rowCount, 3);
+    assert.equal(getSnapshotRowCount(snapshotId), 3);
+
+    const snap = getDb().prepare('SELECT * FROM snapshots WHERE id = ?').get(snapshotId);
+    assert.equal(snap.row_count, 3);
+    assert.equal(snap.api_total, 4);
+    assert.equal(snap.fetch_warnings, 'streamed');
+
+    const r2 = getDb().prepare(
+      'SELECT row_data FROM snapshot_rows WHERE snapshot_id = ? AND row_key = ?'
+    ).get(snapshotId, 'r2');
+    assert.equal(JSON.parse(r2.row_data).name, 'beta-updated');
   });
 
   it('insertSnapshot overwrites when re-running for same dataset+date', () => {

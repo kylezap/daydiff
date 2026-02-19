@@ -1,7 +1,13 @@
 import { apiRequest } from './client.mjs';
 import datasets from '../../config/datasets.mjs';
 import { ensureDataset } from '../db/index.mjs';
-import { insertSnapshot } from '../db/queries.mjs';
+import {
+  insertSnapshot,
+  createEmptySnapshot,
+  insertSnapshotRowsBatch,
+  finalizeSnapshot,
+  getSnapshotRowCount,
+} from '../db/queries.mjs';
 import { log, warn, error } from '../lib/logger.mjs';
 
 /**
@@ -46,37 +52,37 @@ function extractPagination(body) {
 /**
  * Fetch all pages of a paginated DevGrid API endpoint.
  *
+ * When streamOptions is provided, writes each page to the DB immediately (memory bounded).
+ * Otherwise accumulates all rows in memory (legacy behavior for small datasets).
+ *
  * Strategy:
  *   1. First request: send ONLY the user-provided params (no page/limit/offset).
- *      The DevGrid API treats unknown query params as column filters, so we
- *      must not send pagination params the API doesn't expect.
- *   2. Read the pagination metadata from the response to learn the page size
- *      and total count.
- *   3. If there are more records, paginate using `offset` (the most common
- *      server-side pattern that doesn't conflict with column names).
- *      If `offset` fails, fall back to accepting truncated results with a warning.
- *
- * When options.passes > 1, runs the full pagination N times and merges results
- * by rowKey. The API ordering is non-deterministic, so multiple passes capture
- * records that slip through on any single pass. Stops early if a pass adds no
- * new unique records (convergence).
+ *   2. Read pagination metadata to learn page size and total count.
+ *   3. Paginate using offset with overlap to handle unstable API ordering.
  *
  * @param {string} endpoint
  * @param {object} params - User-provided query params (NOT pagination params)
  * @param {object} headers - Extra headers
  * @param {Function|null} transform - Optional row extraction function
  * @param {string} name - Dataset name for logging
- * @param {object} [options] - { passes: 1, rowKey: null }
- * @returns {Promise<{rows: object[], apiTotal: number|null, warnings: string[]}>}
+ * @param {object} [options] - { passes, rowKey, partitionLabel, streamOptions }
+ * @returns {Promise<{rows?: object[], rowCount?: number, apiTotal: number|null, warnings: string[]}>}
  */
 async function fetchAllPages(endpoint, params, headers, transform, name, options = {}) {
-  const { passes = 1, rowKey = null, partitionLabel = '' } = options;
+  const {
+    passes = 1,
+    rowKey = null,
+    partitionLabel = '',
+    streamOptions = null,
+  } = options;
+
+  const streaming = streamOptions != null;
+  const diffIgnoreFields = streaming ? (streamOptions.diffIgnoreFields ?? []) : [];
 
   async function doOnePass(passLabel = partitionLabel) {
     const prefix = partitionLabel ? `[${partitionLabel}] ` : '';
     const warnings = [];
 
-    // ── First request: no pagination params ───────────────────────
     const body = await apiRequest(endpoint, { params, headers });
     const firstRows = extractRows(body, transform, name);
 
@@ -86,10 +92,12 @@ async function fetchAllPages(endpoint, params, headers, transform, name, options
 
     const pag = extractPagination(body);
 
-    // No pagination metadata → single-page response
     if (!pag || pag.total === 0) {
+      if (streaming) {
+        insertSnapshotRowsBatch(streamOptions.snapshotId, firstRows, rowKey, diffIgnoreFields);
+      }
       log(`[fetch] ${name}: ${prefix}${firstRows.length} records (no pagination metadata)`);
-      return { rows: firstRows, apiTotal: null, warnings };
+      return { rows: streaming ? null : firstRows, apiTotal: null, warnings };
     }
 
     const total = pag.total;
@@ -101,17 +109,22 @@ async function fetchAllPages(endpoint, params, headers, transform, name, options
 
     log(`[fetch] ${name}: ${prefix}${total} total records, page size ${pageSize}`);
 
-    if (firstRows.length >= total) {
-      return { rows: firstRows, apiTotal: total, warnings };
+    if (streaming) {
+      insertSnapshotRowsBatch(streamOptions.snapshotId, firstRows, rowKey, diffIgnoreFields);
     }
 
-    // ── Paginate with overlapping offset ────────────────────────────
+    if (firstRows.length >= total) {
+      const rows = streaming ? null : firstRows;
+      return { rows, apiTotal: total, warnings };
+    }
+
     const OVERLAP_RATIO = 0.25;
     const stride = Math.max(1, Math.floor(pageSize * (1 - OVERLAP_RATIO)));
 
-    let allRows = [...firstRows];
+    let allRows = streaming ? null : [...firstRows];
     let currentOffset = pageSize;
     let iteration = 1;
+    const LOG_INTERVAL = 10;
 
     while (currentOffset < total && iteration < MAX_ITERATIONS) {
       const pageParams = { ...params, offset: currentOffset };
@@ -122,15 +135,24 @@ async function fetchAllPages(endpoint, params, headers, transform, name, options
 
         if (!Array.isArray(pageRows) || pageRows.length === 0) break;
 
-        allRows = allRows.concat(pageRows);
-        log(`[fetch] ${name}: ${prefix}fetched ~${allRows.length}/${total} records (offset ${currentOffset})`);
+        if (streaming) {
+          insertSnapshotRowsBatch(streamOptions.snapshotId, pageRows, rowKey, diffIgnoreFields);
+          if (iteration % LOG_INTERVAL === 0) {
+            const count = getSnapshotRowCount(streamOptions.snapshotId);
+            log(`[fetch] ${name}: ${prefix}fetched ~${count}/${total} records (offset ${currentOffset})`);
+          }
+        } else {
+          allRows = allRows.concat(pageRows);
+          log(`[fetch] ${name}: ${prefix}fetched ~${allRows.length}/${total} records (offset ${currentOffset})`);
+        }
 
         if (pageRows.length < pageSize) break;
 
         currentOffset += stride;
         iteration++;
       } catch (err) {
-        const msg = `Pagination with offset failed (${err.message}). Got ${allRows.length}/${total} records.`;
+        const count = streaming ? getSnapshotRowCount(streamOptions.snapshotId) : allRows.length;
+        const msg = `Pagination with offset failed (${err.message}). Got ${count}/${total} records.`;
         warn(`[fetch] ${name}: ${prefix}${msg}`);
         warnings.push(msg);
         break;
@@ -146,36 +168,48 @@ async function fetchAllPages(endpoint, params, headers, transform, name, options
     return { rows: allRows, apiTotal: total, warnings };
   }
 
-  // Single pass: original behavior
   if (passes === 1) {
     return doOnePass();
   }
 
-  // Multi-pass: merge results by rowKey, stop on convergence
   if (!rowKey) {
     throw new Error(`Multi-pass fetch for ${name} requires rowKey in options`);
+  }
+
+  if (streaming) {
+    const allWarnings = [];
+    let apiTotal = null;
+    for (let pass = 1; pass <= passes; pass++) {
+      const beforeCount = getSnapshotRowCount(streamOptions.snapshotId);
+      const result = await doOnePass(passes > 1 ? `pass ${pass}/${passes}` : partitionLabel);
+      const afterCount = getSnapshotRowCount(streamOptions.snapshotId);
+      if (apiTotal === null) apiTotal = result.apiTotal;
+      allWarnings.push(...result.warnings);
+      if (pass > 1) {
+        const added = afterCount - beforeCount;
+        log(`[fetch] ${name}: pass ${pass} added ${added} unique records (total unique: ${afterCount})`);
+        if (added === 0) {
+          log(`[fetch] ${name}: convergence on pass ${pass}, stopping early`);
+          break;
+        }
+      }
+    }
+    return { apiTotal, warnings: allWarnings };
   }
 
   const merged = new Map();
   let apiTotal = null;
   const allWarnings = [];
-
   for (let pass = 1; pass <= passes; pass++) {
-    const partitionLabel = passes > 1 ? `pass ${pass}/${passes}` : '';
-    const result = await doOnePass(partitionLabel);
-
+    const result = await doOnePass(passes > 1 ? `pass ${pass}/${passes}` : partitionLabel);
     if (apiTotal === null) apiTotal = result.apiTotal;
     allWarnings.push(...result.warnings);
-
     const beforeSize = merged.size;
     for (const row of result.rows) {
       const key = row[rowKey];
-      if (key !== undefined && key !== null) {
-        merged.set(String(key), row);
-      }
+      if (key !== undefined && key !== null) merged.set(String(key), row);
     }
     const added = merged.size - beforeSize;
-
     if (pass > 1) {
       log(`[fetch] ${name}: pass ${pass} added ${added} unique records (total unique: ${merged.size})`);
       if (added === 0) {
@@ -184,22 +218,20 @@ async function fetchAllPages(endpoint, params, headers, transform, name, options
       }
     }
   }
-
   const rows = Array.from(merged.values());
   if (apiTotal != null && rows.length > 0) {
     const pct = ((rows.length / apiTotal) * 100).toFixed(1);
     log(`[fetch] ${name}: coverage ${rows.length}/${apiTotal} (${pct}%)`);
   }
-
   return { rows, apiTotal, warnings: allWarnings };
 }
 
 /**
  * Fetch a single dataset from the API and store it as a snapshot.
  *
- * When partitionBy is configured (e.g. severity), fetches each partition
- * separately and merges results. Reduces page boundaries and improves
- * coverage for datasets with unstable API ordering.
+ * Paginated datasets use streaming mode: rows are written to the DB as each
+ * page is fetched (memory bounded). Non-paginated datasets use the legacy
+ * in-memory path.
  *
  * @param {object} datasetConfig - Entry from config/datasets.mjs
  * @param {string} [date] - Override date (default: today)
@@ -219,20 +251,46 @@ async function fetchDataset(datasetConfig, date) {
     passes = 1,
   } = datasetConfig;
 
+  const diffIgnoreFields = datasetConfig.diffIgnoreFields ?? [];
+
   log(`[fetch] Fetching dataset: ${name} from ${endpoint}`);
 
-  let rows;
+  const dataset = ensureDataset(name, endpoint, rowKey, category);
+
+  if (!paginated) {
+    const body = await apiRequest(endpoint, { params, headers });
+    const rows = extractRows(body, transform, name);
+    if (!Array.isArray(rows)) {
+      throw new Error(`[fetch] Transform for ${name} did not return an array`);
+    }
+    const seen = new Map();
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
+      const key = row[rowKey];
+      if (key === undefined || key === null) {
+        throw new Error(`[fetch] Row ${idx} in ${name} is missing row key field "${rowKey}"`);
+      }
+      seen.set(String(key), row);
+    }
+    const normalizedRows = Array.from(seen, ([key, data]) => ({ key, data }));
+    const result = insertSnapshot(dataset.id, date, normalizedRows, {
+      apiTotal: null,
+      fetchWarnings: null,
+      diffIgnoreFields,
+    });
+    log(`[fetch] ${name}: stored ${result.rowCount} rows for ${date}`);
+    return { dataset: name, datasetId: dataset.id, rowCount: result.rowCount, snapshotId: result.snapshotId };
+  }
+
+  const snapshotId = createEmptySnapshot(dataset.id, date);
+  const streamOptions = { snapshotId, rowKey, diffIgnoreFields };
+  const fetchOptions = { passes, rowKey, streamOptions };
+
   let apiTotal = null;
   const warnings = [];
 
-  const fetchOptions = { passes, rowKey };
-
-  if (paginated && partitionBy) {
-    // Severity-partitioned fetch: one request per partition value, then merge
+  if (partitionBy) {
     const { param, values } = partitionBy;
-    const merged = new Map();
-    let totalApiTotal = 0;
-
     log(`[fetch] ${name}: partitioned by ${param} (${values.join(', ')})`);
 
     for (const value of values) {
@@ -241,81 +299,33 @@ async function fetchDataset(datasetConfig, date) {
         ...fetchOptions,
         partitionLabel: value,
       });
-
-      const beforeSize = merged.size;
-      for (const row of result.rows) {
-        const k = row[rowKey];
-        if (k !== undefined && k !== null) merged.set(String(k), row);
-      }
-      const added = merged.size - beforeSize;
-
-      if (result.apiTotal != null) totalApiTotal += result.apiTotal;
+      if (result.apiTotal != null) apiTotal = (apiTotal ?? 0) + result.apiTotal;
       warnings.push(...result.warnings);
-
-      log(`[fetch] ${name}: severity=${value} → ${result.rows.length} rows (+${added} unique, total unique: ${merged.size})`);
+      const count = getSnapshotRowCount(snapshotId);
+      log(`[fetch] ${name}: severity=${value} → ${result.rows?.length ?? 'streamed'} rows (total unique: ${count})`);
     }
 
-    rows = Array.from(merged.values());
-    apiTotal = totalApiTotal > 0 ? totalApiTotal : null;
-
-    if (apiTotal != null && rows.length > 0) {
-      const pct = ((rows.length / apiTotal) * 100).toFixed(1);
-      log(`[fetch] ${name}: partitioned coverage ${rows.length}/${apiTotal} (${pct}%)`);
+    if (apiTotal != null) {
+      const count = getSnapshotRowCount(snapshotId);
+      const pct = ((count / apiTotal) * 100).toFixed(1);
+      log(`[fetch] ${name}: partitioned coverage ${count}/${apiTotal} (${pct}%)`);
     }
-  } else if (paginated) {
+  } else {
     const result = await fetchAllPages(endpoint, params, headers, transform, name, fetchOptions);
-    rows = result.rows;
     apiTotal = result.apiTotal;
     warnings.push(...result.warnings);
-  } else {
-    // Single non-paginated request
-    const body = await apiRequest(endpoint, { params, headers });
-    rows = extractRows(body, transform, name);
   }
 
-  if (!Array.isArray(rows)) {
-    throw new Error(`[fetch] Transform for ${name} did not return an array`);
-  }
-
-  // Normalize into {key, data} pairs, deduplicating by row key.
-  // Offset-based pagination can return duplicates if the API lacks stable ordering.
-  const seen = new Map();
-  for (let idx = 0; idx < rows.length; idx++) {
-    const row = rows[idx];
-    const key = row[rowKey];
-    if (key === undefined || key === null) {
-      throw new Error(
-        `[fetch] Row ${idx} in ${name} is missing row key field "${rowKey}"`
-      );
-    }
-    seen.set(String(key), row); // last occurrence wins
-  }
-  const normalizedRows = Array.from(seen, ([key, data]) => ({ key, data }));
-
-  if (normalizedRows.length < rows.length) {
-    const msg = `Deduplicated ${rows.length} → ${normalizedRows.length} rows (${rows.length - normalizedRows.length} duplicate keys removed)`;
-    warn(`[fetch] ${name}: ${msg}`);
-    warnings.push(msg);
-  }
-
-  // Ensure dataset record exists in DB
-  const dataset = ensureDataset(name, endpoint, rowKey, category);
-
-  // Store snapshot with fetch metadata
   const fetchWarnings = warnings.length > 0 ? warnings.join('; ') : null;
-  const result = insertSnapshot(dataset.id, date, normalizedRows, {
-    apiTotal,
-    fetchWarnings,
-    diffIgnoreFields: datasetConfig.diffIgnoreFields ?? [],
-  });
+  const { rowCount } = finalizeSnapshot(snapshotId, apiTotal, fetchWarnings);
 
-  log(`[fetch] ${name}: stored ${result.rowCount} rows for ${date}`);
+  log(`[fetch] ${name}: stored ${rowCount} rows for ${date}`);
 
   return {
     dataset: name,
     datasetId: dataset.id,
-    rowCount: result.rowCount,
-    snapshotId: result.snapshotId,
+    rowCount,
+    snapshotId,
   };
 }
 

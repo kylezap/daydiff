@@ -89,11 +89,17 @@ export async function fetchSourceSegments(datasetId, date, category) {
   return data;
 }
 
+/**
+ * @param {string} [date] - Optional YYYY-MM-DD. When omitted, backend returns latest.
+ */
 export async function fetchReferential(date) {
   const { data } = await apiFetch(`${BASE}/quality/referential`, { date });
   return data;
 }
 
+/**
+ * @param {string} [date] - Optional YYYY-MM-DD. When omitted, backend returns latest.
+ */
 export async function fetchAssertions(date) {
   const { data } = await apiFetch(`${BASE}/quality/assertions`, { date });
   return data;

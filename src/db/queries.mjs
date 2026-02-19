@@ -87,6 +87,110 @@ export function insertSnapshot(datasetId, date, rows, meta = {}) {
 }
 
 /**
+ * Create an empty snapshot for streaming inserts. Deletes existing snapshot for
+ * dataset+date if present. Call insertSnapshotRowsBatch for each page, then
+ * finalizeSnapshot when done.
+ *
+ * @param {number} datasetId
+ * @param {string} date - YYYY-MM-DD
+ * @returns {number} snapshotId
+ */
+export function createEmptySnapshot(datasetId, date) {
+  const db = getDb();
+
+  const run = db.transaction(() => {
+    const existing = db.prepare(
+      'SELECT id FROM snapshots WHERE dataset_id = ? AND fetched_date = ?'
+    ).get(datasetId, date);
+
+    if (existing) {
+      db.prepare('DELETE FROM snapshot_rows WHERE snapshot_id = ?').run(existing.id);
+      db.prepare('DELETE FROM snapshots WHERE id = ?').run(existing.id);
+    }
+
+    const result = db.prepare(`
+      INSERT INTO snapshots (dataset_id, fetched_date, row_count, api_total, fetch_warnings)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(datasetId, date, 0, null, null);
+
+    return Number(result.lastInsertRowid);
+  });
+
+  return run();
+}
+
+/**
+ * Insert a batch of rows into an existing snapshot (streaming mode).
+ * Uses INSERT OR REPLACE to handle duplicate row_keys from overlap pagination.
+ *
+ * @param {number} snapshotId
+ * @param {object[]} rows - Raw API rows (each must have rowKey field)
+ * @param {string} rowKey - Field name for the row key (e.g. 'id')
+ * @param {string[]} [diffIgnoreFields=[]] - Keys to omit from hash
+ */
+export function insertSnapshotRowsBatch(snapshotId, rows, rowKey, diffIgnoreFields = []) {
+  if (rows.length === 0) return;
+
+  const db = getDb();
+  const insertRow = db.prepare(`
+    INSERT INTO snapshot_rows (snapshot_id, row_key, row_data, row_hash)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(snapshot_id, row_key) DO UPDATE SET
+      row_data = excluded.row_data,
+      row_hash = excluded.row_hash
+  `);
+
+  const run = db.transaction(() => {
+    for (const row of rows) {
+      const key = row[rowKey];
+      if (key === undefined || key === null) continue;
+      const json = JSON.stringify(row);
+      const hash = hashRow(row, diffIgnoreFields);
+      insertRow.run(snapshotId, String(key), json, hash);
+    }
+  });
+
+  run();
+}
+
+/**
+ * Get the number of rows in a snapshot (for progress/convergence checks).
+ * @param {number} snapshotId
+ * @returns {number}
+ */
+export function getSnapshotRowCount(snapshotId) {
+  const row = getDb().prepare(
+    'SELECT COUNT(*) AS cnt FROM snapshot_rows WHERE snapshot_id = ?'
+  ).get(snapshotId);
+  return row.cnt;
+}
+
+/**
+ * Finalize a snapshot after streaming inserts: set row_count, api_total, fetch_warnings.
+ *
+ * @param {number} snapshotId
+ * @param {number|null} apiTotal
+ * @param {string|null} fetchWarnings
+ * @returns {{ rowCount: number }}
+ */
+export function finalizeSnapshot(snapshotId, apiTotal = null, fetchWarnings = null) {
+  const db = getDb();
+
+  const row = db.prepare(
+    'SELECT COUNT(*) AS cnt FROM snapshot_rows WHERE snapshot_id = ?'
+  ).get(snapshotId);
+  const rowCount = row.cnt;
+
+  db.prepare(`
+    UPDATE snapshots
+    SET row_count = ?, api_total = ?, fetch_warnings = ?
+    WHERE id = ?
+  `).run(rowCount, apiTotal, fetchWarnings, snapshotId);
+
+  return { rowCount };
+}
+
+/**
  * Get the most recent snapshot for a dataset on or before a given date.
  */
 export function getLatestSnapshot(datasetId, beforeDate) {

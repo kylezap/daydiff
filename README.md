@@ -40,7 +40,7 @@ node src/cli.mjs diff             # Compute diff vs previous day
 node src/cli.mjs run              # Fetch + diff in one step
 node src/cli.mjs dashboard        # Start dashboard on localhost:3000
 node src/cli.mjs status           # Show latest fetch/diff summary
-node src/cli.mjs install-schedule # Install macOS launchd daily job. to unload: launchctl unload "/Users/kylezapcic/Library/LaunchAgents/com.daydiff.daily.plist"
+node src/cli.mjs install-schedule # Install macOS launchd daily job. To unload: launchctl unload "~/Library/LaunchAgents/com.daydiff.daily.plist"
 ```
 
 ## Configuration

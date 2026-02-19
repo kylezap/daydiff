@@ -7,8 +7,8 @@
     "daydiff": "./src/cli.mjs"
   },
   "scripts": {
-    "start": "node src/cli.mjs run",
-    "fetch": "node src/cli.mjs fetch",
+    "start": "node --max-old-space-size=8192 src/cli.mjs run",
+    "fetch": "node --max-old-space-size=8192 src/cli.mjs fetch",
     "diff": "node src/cli.mjs diff",
     "dashboard": "node src/cli.mjs dashboard",
     "dev": "concurrently \"node src/cli.mjs dashboard\" \"npm run dev --prefix dashboard\"",

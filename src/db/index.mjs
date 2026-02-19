@@ -155,6 +155,28 @@ export function getDb() {
     // Config may not be available in test env
   }
 
+  // Migration 7: rename platform datasets from lowercase to Title Case
+  // Config changed applications→Applications, components→Components, repositories→Repositories.
+  // Without this, ensureDataset would create NEW rows (name is unique), orphaning existing snapshots/diffs.
+  try {
+    const renames = [
+      ['applications', 'Applications'],
+      ['components', 'Components'],
+      ['repositories', 'Repositories'],
+    ];
+    const updateName = _db.prepare('UPDATE datasets SET name = ? WHERE name = ?');
+    for (const [oldName, newName] of renames) {
+      const row = _db.prepare('SELECT id FROM datasets WHERE name = ?').get(oldName);
+      const exists = _db.prepare('SELECT id FROM datasets WHERE name = ?').get(newName);
+      if (row && !exists) {
+        updateName.run(newName, oldName);
+        console.log(`[db] Renamed dataset: ${oldName} → ${newName}`);
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
   return _db;
 }
 

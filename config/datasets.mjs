@@ -51,7 +51,7 @@ const platformDatasets = [
     category: 'platform',
   },
   {
-    name: 'repositories',
+    name: 'Repositories',
     endpoint: '/repositories',
     rowKey: 'id',
     paginated: true,
