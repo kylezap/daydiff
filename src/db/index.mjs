@@ -155,7 +155,29 @@ export function getDb() {
     // Config may not be available in test env
   }
 
-  // Migration 7: rename platform datasets from lowercase to Title Case
+  // Migration 7: add executive_reports table
+  try {
+    const tables = _db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='executive_reports'"
+    ).get();
+    if (!tables) {
+      console.log('[db] Creating executive_reports table...');
+      _db.exec(`
+        CREATE TABLE IF NOT EXISTS executive_reports (
+          id INTEGER PRIMARY KEY,
+          report_date TEXT NOT NULL UNIQUE,
+          content TEXT NOT NULL,
+          model_used TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+      console.log('[db] executive_reports table created.');
+    }
+  } catch {
+    // Table doesn't exist yet — schema.sql will create it
+  }
+
+  // Migration 8: rename platform datasets from lowercase to Title Case
   // Config changed applications→Applications, components→Components, repositories→Repositories.
   // Without this, ensureDataset would create NEW rows (name is unique), orphaning existing snapshots/diffs.
   try {

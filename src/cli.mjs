@@ -91,6 +91,18 @@ program
         log(`\n[quality] All ${assertionResults.length} assertion(s) passed`);
       }
 
+      // Executive report (LLM)
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const { generateExecutiveReport } = await import('./report/executive.mjs');
+          await generateExecutiveReport(today);
+        } catch (err) {
+          warn(`[report] Failed: ${err.message}`);
+        }
+      } else {
+        log('[report] Skipped (OPENAI_API_KEY not set)');
+      }
+
       // Auto-prune old snapshots
       const retentionDays = config.retention.snapshotDays;
       const pruneResult = pruneSnapshots(retentionDays);

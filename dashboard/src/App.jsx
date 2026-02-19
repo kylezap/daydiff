@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.jsx';
 import Overview from './pages/Overview.jsx';
 import DiffDetail from './pages/DiffDetail.jsx';
 import Quality from './pages/Quality.jsx';
+import Report from './pages/Report.jsx';
 
 export default function App() {
   return (
@@ -26,6 +27,9 @@ export default function App() {
 
           {/* Data Quality */}
           <Route path="/quality" element={<Quality />} />
+
+          {/* Executive Report */}
+          <Route path="/report" element={<Report />} />
         </Routes>
       </main>
 

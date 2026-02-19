@@ -26,6 +26,11 @@ export default function Sidebar() {
         <NavLink to="/quality" end className={linkClass}>Overview</NavLink>
       </div>
 
+      <div className="sidebar-group">
+        <div className="sidebar-label">Reports</div>
+        <NavLink to="/report" end className={linkClass}>Executive Report</NavLink>
+      </div>
+
       <style>{`
         .sidebar {
           width: 200px;

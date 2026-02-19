@@ -592,6 +592,54 @@ export function getAvailableDates(category = null) {
   ).all().map(r => r.to_date);
 }
 
+// ─── Executive Reports ────────────────────────────────────────────
+
+/**
+ * Insert or replace an executive report for a given date.
+ * @param {string} date - YYYY-MM-DD
+ * @param {string} content - Markdown report content
+ * @param {string} [modelUsed] - Model used for generation
+ */
+export function insertExecutiveReport(date, content, modelUsed = null) {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO executive_reports (report_date, content, model_used)
+    VALUES (?, ?, ?)
+    ON CONFLICT(report_date) DO UPDATE SET
+      content = excluded.content,
+      model_used = excluded.model_used,
+      created_at = datetime('now')
+  `).run(date, content, modelUsed);
+}
+
+/**
+ * Get the executive report for a given date, or the latest if date is omitted.
+ * @param {string|null} [date] - YYYY-MM-DD, or null for latest
+ * @returns {object|null} Report row or null
+ */
+export function getExecutiveReport(date = null) {
+  const db = getDb();
+  if (date) {
+    return db.prepare(
+      'SELECT * FROM executive_reports WHERE report_date = ?'
+    ).get(date);
+  }
+  return db.prepare(
+    'SELECT * FROM executive_reports ORDER BY report_date DESC LIMIT 1'
+  ).get();
+}
+
+/**
+ * Get all report dates (for dropdown).
+ * @returns {string[]} Report dates YYYY-MM-DD, newest first
+ */
+export function getReportDates() {
+  return getDb()
+    .prepare('SELECT report_date FROM executive_reports ORDER BY report_date DESC')
+    .all()
+    .map((r) => r.report_date);
+}
+
 // ─── Retention ───────────────────────────────────────────────────
 
 /**

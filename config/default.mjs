@@ -67,6 +67,12 @@ const config = {
   retention: {
     snapshotDays: parseInt(process.env.RETENTION_DAYS, 10) || 30,
   },
+
+  // Executive report (LLM)
+  report: {
+    model: process.env.REPORT_MODEL || 'gpt-4o-mini',
+    maxSamplePerType: parseInt(process.env.REPORT_MAX_SAMPLE, 10) || 5,
+  },
 };
 
 export default config;

@@ -74,6 +74,14 @@ CREATE TABLE IF NOT EXISTS assertion_results (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS executive_reports (
+  id INTEGER PRIMARY KEY,
+  report_date TEXT NOT NULL UNIQUE,
+  content TEXT NOT NULL,
+  model_used TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_diffs_dates ON diffs(to_date, dataset_id);
 CREATE INDEX IF NOT EXISTS idx_diff_items_type ON diff_items(diff_id, change_type);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_key ON snapshot_rows(snapshot_id, row_key);

@@ -8,6 +8,8 @@ import {
   getTrend,
   getAvailableDates,
   getPopulationTrend,
+  getExecutiveReport,
+  getReportDates,
 } from '../db/queries.mjs';
 import {
   getFlappingRows,
@@ -246,6 +248,30 @@ export function setupRoutes(app) {
       }
       const summary = getSummaryForDate(date, cat);
       res.json({ data: summary, date });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/report ─────────────────────────────────────────────
+  app.get('/api/report', (req, res) => {
+    try {
+      const { date } = req.query;
+      const report = getExecutiveReport(date || null);
+      if (!report) {
+        return res.status(404).json({ error: 'No executive report found' });
+      }
+      res.json({ data: report });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/report/dates ───────────────────────────────────────
+  app.get('/api/report/dates', (req, res) => {
+    try {
+      const dates = getReportDates();
+      res.json({ data: dates });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
