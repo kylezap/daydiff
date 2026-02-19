@@ -1,0 +1,10 @@
+---
+description: Do not use or suggest the seed script for data setup.
+alwaysApply: true
+---
+
+# Do Not Use Seed Script
+
+- Do not run, suggest running, or recommend `node scripts/seed.mjs` (or any reference to "seed script" / `scripts/seed.mjs`).
+- Do not propose seed as a way to populate the DB, get sample data, or reset data for development/testing.
+- Prefer real data flows: `node src/cli.mjs fetch`, `node src/cli.mjs diff`, or direct DB/API usage as appropriate.
