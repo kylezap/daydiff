@@ -50,7 +50,7 @@ export default function SummaryCards({ summary }) {
 
   return (
     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-      <Card label="Total Rows" value={total} type="total" />
+      <Card label="Total Changes" value={total} type="total" />
       <Card label="Added" value={totals.added} type="added" />
       <Card label="Removed" value={totals.removed} type="removed" />
       <Card label="Modified" value={totals.modified} type="modified" />
