@@ -93,6 +93,32 @@ function buildGridData(items) {
 
   const fields = Array.from(fieldSet);
 
+  const hasName = fields.includes('name');
+  const rowKeyCol = {
+    field: '_rowKey',
+    headerName: 'Row Key',
+    width: 150,
+    pinned: 'left',
+  };
+  const rowKeyColUnpinned = { ...rowKeyCol, pinned: undefined };
+  const nameCol = {
+    field: 'name',
+    headerName: 'Name',
+    minWidth: 120,
+    flex: 1,
+    pinned: 'left',
+    cellRenderer: DiffCellRenderer,
+  };
+  const dataCols = fields.map((f) => {
+    if (f === 'name') return rowKeyColUnpinned;
+    return {
+      field: f,
+      headerName: f,
+      minWidth: 120,
+      flex: 1,
+      cellRenderer: DiffCellRenderer,
+    };
+  });
   const columnDefs = [
     {
       field: '_changeType',
@@ -101,19 +127,7 @@ function buildGridData(items) {
       pinned: 'left',
       cellRenderer: DiffCellRenderer,
     },
-    {
-      field: '_rowKey',
-      headerName: 'Row Key',
-      width: 150,
-      pinned: 'left',
-    },
-    ...fields.map((f) => ({
-      field: f,
-      headerName: f,
-      minWidth: 120,
-      flex: 1,
-      cellRenderer: DiffCellRenderer,
-    })),
+    ...(hasName ? [nameCol, ...dataCols] : [rowKeyCol, ...dataCols]),
   ];
 
   const rowData = items.map((item) => {
@@ -140,8 +154,9 @@ function buildGridData(items) {
  *   changeType  — Optional change_type filter (null = all)
  *   quickFilter — Text to search across all columns
  *   onTotalChange — Callback when total row count changes
+ *   onRowClick  — Optional callback when a row is clicked (receives row data)
  */
-export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChange, diffMeta }) {
+export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChange, onRowClick }) {
   const gridRef = useRef(null);
   const [rowData, setRowData] = useState([]);
   const [columnDefs, setColumnDefs] = useState([]);
@@ -205,17 +220,19 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
 
   const getRowStyle = useCallback((params) => {
     if (!params.data) return {};
+    const base = {};
+    if (onRowClick) base.cursor = 'pointer';
     switch (params.data._changeType) {
       case 'added':
-        return { background: 'rgba(63, 185, 80, 0.05)' };
+        return { ...base, background: 'rgba(63, 185, 80, 0.05)' };
       case 'removed':
-        return { background: 'rgba(248, 81, 73, 0.05)' };
+        return { ...base, background: 'rgba(248, 81, 73, 0.05)' };
       case 'modified':
-        return { background: 'rgba(227, 179, 65, 0.03)' };
+        return { ...base, background: 'rgba(227, 179, 65, 0.03)' };
       default:
-        return {};
+        return base;
     }
-  }, []);
+  }, [onRowClick]);
 
   const [exporting, setExporting] = useState(false);
 
@@ -271,6 +288,7 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
             columnDefs={columnDefs}
             defaultColDef={defaultColDef}
             getRowStyle={getRowStyle}
+            onRowClicked={(e) => onRowClick?.(e.data)}
             animateRows={false}
             enableCellTextSelection={true}
             suppressCellFocus={true}

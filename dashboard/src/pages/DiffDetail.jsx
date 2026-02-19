@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DiffGrid from '../components/DiffGrid.jsx';
+import DiffDrawer from '../components/DiffDrawer.jsx';
 import FilterBar from '../components/FilterBar.jsx';
 import DatePicker from '../components/DatePicker.jsx';
 import {
@@ -27,6 +28,7 @@ export default function DiffDetail({ category, basePath = '/platform' }) {
   const [quickFilter, setQuickFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [gridTotal, setGridTotal] = useState(0);
+  const [selectedRow, setSelectedRow] = useState(null);
 
   // Load initial data (scoped to category)
   useEffect(() => {
@@ -216,6 +218,15 @@ export default function DiffDetail({ category, basePath = '/platform' }) {
         changeType={changeType}
         quickFilter={quickFilter}
         onTotalChange={handleTotalChange}
+        onRowClick={setSelectedRow}
+      />
+
+      <DiffDrawer
+        open={!!selectedRow}
+        onClose={() => setSelectedRow(null)}
+        row={selectedRow}
+        fromDate={diff?.from_date}
+        toDate={diff?.to_date}
       />
     </div>
   );
