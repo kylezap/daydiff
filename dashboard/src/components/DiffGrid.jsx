@@ -299,7 +299,7 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
             getRowStyle={getRowStyle}
             onRowClicked={(e) => onRowClick?.(e.data)}
             animateRows={false}
-            enableCellTextSelection={true}
+            enableCellTextSelection={false}
             suppressCellFocus={true}
             getRowId={(params) => String(params.data._id)}
             suppressPaginationPanel={true}

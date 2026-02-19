@@ -177,6 +177,15 @@ export function getDb() {
     // Non-fatal
   }
 
+  // Sync: ensure all config datasets exist in DB (new datasets like Resources appear in UI before first fetch)
+  try {
+    for (const ds of datasetConfigs) {
+      ensureDataset(ds.name, ds.endpoint, ds.rowKey, ds.category || 'platform');
+    }
+  } catch {
+    // Config may not be available in test env
+  }
+
   return _db;
 }
 

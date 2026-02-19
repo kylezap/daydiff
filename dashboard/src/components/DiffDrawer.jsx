@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const INLINE_MAX_LEN = 150;
 const BADGE_COLORS = {
@@ -159,7 +160,7 @@ export default function DiffDrawer({ open, onClose, row, fromDate, toDate }) {
     (k) => !k.startsWith('_')
   );
 
-  return (
+  const content = (
     <>
       {/* Backdrop */}
       <div
@@ -169,11 +170,11 @@ export default function DiffDrawer({ open, onClose, row, fromDate, toDate }) {
           position: 'fixed',
           inset: 0,
           background: 'rgba(0,0,0,0.5)',
-          zIndex: 1000,
+          zIndex: 100000,
           animation: 'diff-drawer-fade 0.2s ease-out',
         }}
       />
-      {/* Drawer panel */}
+      {/* Drawer panel — z-index above AG Grid overlays (~99999) */}
       <div
         role="dialog"
         aria-label="Diff details"
@@ -187,7 +188,7 @@ export default function DiffDrawer({ open, onClose, row, fromDate, toDate }) {
           background: '#161b22',
           borderLeft: '1px solid #30363d',
           boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
-          zIndex: 1001,
+          zIndex: 100001,
           display: 'flex',
           flexDirection: 'column',
           animation: 'diff-drawer-slide 0.2s ease-out',
@@ -358,6 +359,10 @@ export default function DiffDrawer({ open, onClose, row, fromDate, toDate }) {
       `}</style>
     </>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(content, document.body, 'diff-drawer-portal')
+    : null;
 }
 
 const thStyle = {

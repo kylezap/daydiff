@@ -218,7 +218,7 @@ export default function DiffDetail({ category, basePath = '/platform' }) {
         changeType={changeType}
         quickFilter={quickFilter}
         onTotalChange={handleTotalChange}
-        onRowClick={setSelectedRow}
+        onRowClick={(data) => setSelectedRow(data)}
       />
 
       <DiffDrawer
