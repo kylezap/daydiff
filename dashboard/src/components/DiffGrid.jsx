@@ -94,13 +94,15 @@ function buildGridData(items) {
   const fields = Array.from(fieldSet);
 
   const hasName = fields.includes('name');
+  const nameIdx = fields.indexOf('name');
   const rowKeyCol = {
     field: '_rowKey',
     headerName: 'Row Key',
     width: 150,
     pinned: 'left',
+    colId: '_rowKey',
   };
-  const rowKeyColUnpinned = { ...rowKeyCol, pinned: undefined };
+  const rowKeyColUnpinned = { ...rowKeyCol, pinned: undefined, colId: '_rowKey_unpinned' };
   const nameCol = {
     field: 'name',
     headerName: 'Name',
@@ -108,17 +110,23 @@ function buildGridData(items) {
     flex: 1,
     pinned: 'left',
     cellRenderer: DiffCellRenderer,
+    colId: 'name',
   };
-  const dataCols = fields.map((f) => {
-    if (f === 'name') return rowKeyColUnpinned;
-    return {
-      field: f,
-      headerName: f,
-      minWidth: 120,
-      flex: 1,
-      cellRenderer: DiffCellRenderer,
-    };
-  });
+  // Build data columns, excluding 'name' when we have a dedicated nameCol to avoid duplicates
+  const otherFields = hasName ? fields.filter((f) => f !== 'name') : fields;
+  const baseDataCols = otherFields.map((f) => ({
+    field: f,
+    headerName: f,
+    minWidth: 120,
+    flex: 1,
+    cellRenderer: DiffCellRenderer,
+  }));
+  // When hasName, insert Row Key at name's original position (swap)
+  const dataCols =
+    hasName && nameIdx >= 0
+      ? [...baseDataCols.slice(0, nameIdx), rowKeyColUnpinned, ...baseDataCols.slice(nameIdx)]
+      : baseDataCols;
+  const secondCol = hasName ? nameCol : rowKeyCol;
   const columnDefs = [
     {
       field: '_changeType',
@@ -127,7 +135,8 @@ function buildGridData(items) {
       pinned: 'left',
       cellRenderer: DiffCellRenderer,
     },
-    ...(hasName ? [nameCol, ...dataCols] : [rowKeyCol, ...dataCols]),
+    secondCol,
+    ...dataCols,
   ];
 
   const rowData = items.map((item) => {
