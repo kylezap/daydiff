@@ -93,7 +93,8 @@ export async function fetchSourceSegments(datasetId, date, category) {
  * @param {string} [date] - Optional YYYY-MM-DD. When omitted, backend returns latest.
  */
 export async function fetchReferential(date) {
-  const { data } = await apiFetch(`${BASE}/quality/referential`, { date });
+  const params = date != null && date !== '' ? { date } : {};
+  const { data } = await apiFetch(`${BASE}/quality/referential`, params);
   return data;
 }
 
@@ -101,7 +102,8 @@ export async function fetchReferential(date) {
  * @param {string} [date] - Optional YYYY-MM-DD. When omitted, backend returns latest.
  */
 export async function fetchAssertions(date) {
-  const { data } = await apiFetch(`${BASE}/quality/assertions`, { date });
+  const params = date != null && date !== '' ? { date } : {};
+  const { data } = await apiFetch(`${BASE}/quality/assertions`, params);
   return data;
 }
 
@@ -112,5 +114,21 @@ export async function fetchAssertionHistory(assertionId, days) {
 
 export async function fetchAssertionSummary(days) {
   const { data } = await apiFetch(`${BASE}/quality/assertions/summary`, { days });
+  return data;
+}
+
+// ─── Executive Report ────────────────────────────────────────────
+
+/**
+ * @param {string} [date] - Optional YYYY-MM-DD. When omitted, returns latest.
+ */
+export async function fetchReport(date) {
+  const params = date != null && date !== '' ? { date } : {};
+  const { data } = await apiFetch(`${BASE}/report`, params);
+  return data;
+}
+
+export async function fetchReportDates() {
+  const { data } = await apiFetch(`${BASE}/report/dates`);
   return data;
 }
