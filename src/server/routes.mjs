@@ -89,6 +89,27 @@ export function setupRoutes(app) {
     }
   });
 
+  // ─── GET /api/diffs/:id/items/ids ───────────────────────────────
+  // Lightweight endpoint: IDs of all matching rows (for cross-page selection).
+  // MUST come before /items so Express matches this path first.
+  app.get('/api/diffs/:id/items/ids', (req, res) => {
+    try {
+      const diffId = parseInt(req.params.id, 10);
+      const diff = getDiff(diffId);
+      if (!diff) {
+        return res.status(404).json({ error: 'Diff not found' });
+      }
+      const { change_type, search } = req.query;
+      const { ids, total } = getDiffItemIds(diffId, {
+        changeType: change_type || null,
+        search: search || null,
+      });
+      res.json({ ids, total });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── GET /api/diffs/:id/items ───────────────────────────────────
   // Supports server-side pagination for large diffs (30k+ rows).
   // Query params: offset, limit, change_type, search, sort, dir
@@ -157,26 +178,6 @@ export function setupRoutes(app) {
           total,
         },
       });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // ─── GET /api/diffs/:id/items/ids ───────────────────────────────
-  // Lightweight endpoint: IDs of all matching rows (for cross-page selection).
-  app.get('/api/diffs/:id/items/ids', (req, res) => {
-    try {
-      const diffId = parseInt(req.params.id, 10);
-      const diff = getDiff(diffId);
-      if (!diff) {
-        return res.status(404).json({ error: 'Diff not found' });
-      }
-      const { change_type, search } = req.query;
-      const { ids, total } = getDiffItemIds(diffId, {
-        changeType: change_type || null,
-        search: search || null,
-      });
-      res.json({ ids, total });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
