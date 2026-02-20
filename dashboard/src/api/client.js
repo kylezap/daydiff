@@ -1,5 +1,14 @@
 const BASE = '/api';
 
+/**
+ * Fetch dashboard feature flags and config.
+ * @returns {{ qualityTabEnabled: boolean }}
+ */
+export async function fetchConfig(options = {}) {
+  const { data } = await apiFetch(`${BASE}/config`, {}, options);
+  return data;
+}
+
 async function apiFetch(path, params = {}, options = {}) {
   const url = new URL(path, window.location.origin);
   for (const [k, v] of Object.entries(params)) {

@@ -73,10 +73,12 @@ export async function startServer(portOverride) {
       console.log(`  Press Ctrl+C to stop`);
       console.log(`═══════════════════════════════════════════\n`);
 
-      // Open browser on macOS
-      exec(`open ${url}`, (err) => {
-        if (err) console.log(`  Open ${url} in your browser`);
-      });
+      // Open browser (skipped when DASHBOARD_SKIP_OPEN=1, e.g. npm run dev)
+      if (process.env.DASHBOARD_SKIP_OPEN !== '1') {
+        exec(`open ${url}`, (err) => {
+          if (err) console.log(`  Open ${url} in your browser`);
+        });
+      }
 
       resolvePromise(server);
     });

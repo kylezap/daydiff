@@ -1,15 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar.jsx';
 import Overview from './pages/Overview.jsx';
 import DiffDetail from './pages/DiffDetail.jsx';
 import Quality from './pages/Quality.jsx';
 import Report from './pages/Report.jsx';
+import { fetchConfig } from './api/client.js';
 
 export default function App() {
+  const [config, setConfig] = useState({ qualityTabEnabled: false });
+
+  useEffect(() => {
+    fetchConfig()
+      .then(setConfig)
+      .catch(() => setConfig({ qualityTabEnabled: false }));
+  }, []);
+
   return (
     <div className="app-layout">
-      <Sidebar />
+      <Sidebar qualityTabEnabled={config.qualityTabEnabled} />
       <main className="app-main">
         <Routes>
           {/* Redirect root to platform overview */}
@@ -25,8 +34,17 @@ export default function App() {
           <Route path="/vulns/diff" element={<DiffDetail category="vulnerability" basePath="/vulns" />} />
           <Route path="/vulns/diff/:id" element={<DiffDetail category="vulnerability" basePath="/vulns" />} />
 
-          {/* Data Quality */}
-          <Route path="/quality" element={<Quality />} />
+          {/* Data Quality (feature-flagged) */}
+          <Route
+            path="/quality"
+            element={
+              config.qualityTabEnabled ? (
+                <Quality />
+              ) : (
+                <Navigate to="/platform" replace />
+              )
+            }
+          />
 
           {/* Executive Report */}
           <Route path="/report" element={<Report />} />

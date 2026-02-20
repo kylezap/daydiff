@@ -4,7 +4,7 @@ import { NavLink } from 'react-router-dom';
 const linkClass = ({ isActive }) =>
   `sidebar-link ${isActive ? 'active' : ''}`;
 
-export default function Sidebar() {
+export default function Sidebar({ qualityTabEnabled = false }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">DayDiff</div>
@@ -21,10 +21,12 @@ export default function Sidebar() {
         <NavLink to="/vulns/diff" className={linkClass}>Diff Detail</NavLink>
       </div>
 
-      <div className="sidebar-group">
-        <div className="sidebar-label">Data Quality</div>
-        <NavLink to="/quality" end className={linkClass}>Overview</NavLink>
-      </div>
+      {qualityTabEnabled && (
+        <div className="sidebar-group">
+          <div className="sidebar-label">Data Quality</div>
+          <NavLink to="/quality" end className={linkClass}>Overview</NavLink>
+        </div>
+      )}
 
       <div className="sidebar-group">
         <div className="sidebar-label">Reports</div>

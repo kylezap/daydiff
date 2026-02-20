@@ -73,6 +73,11 @@ const config = {
     model: process.env.REPORT_MODEL || 'gpt-4o-mini',
     maxSamplePerType: parseInt(process.env.REPORT_MAX_SAMPLE, 10) || 5,
   },
+
+  // Feature flags (dashboard UI)
+  features: {
+    qualityTab: process.env.QUALITY_TAB_ENABLED === 'true',
+  },
 };
 
 export default config;

@@ -20,11 +20,21 @@ import {
   getAssertionHistory,
   getAssertionSummary,
 } from '../analysis/queries.mjs';
+import config from '../../config/default.mjs';
 
 /**
  * Set up all API routes for the dashboard.
  */
 export function setupRoutes(app) {
+
+  // ─── GET /api/config ────────────────────────────────────────────
+  app.get('/api/config', (_req, res) => {
+    res.json({
+      data: {
+        qualityTabEnabled: config.features.qualityTab,
+      },
+    });
+  });
 
   // ─── GET /api/datasets ──────────────────────────────────────────
   app.get('/api/datasets', (req, res) => {

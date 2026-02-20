@@ -11,7 +11,7 @@
     "fetch": "node --max-old-space-size=8192 src/cli.mjs fetch",
     "diff": "node src/cli.mjs diff",
     "dashboard": "node src/cli.mjs dashboard",
-    "dev": "concurrently \"node src/cli.mjs dashboard\" \"npm run dev --prefix dashboard\"",
+    "dev": "concurrently \"DASHBOARD_SKIP_OPEN=1 node src/cli.mjs dashboard\" \"npm run dev --prefix dashboard\"",
     "status": "node src/cli.mjs status",
     "build:dashboard": "npm run build --prefix dashboard",
     "test": "node --test test/*.test.mjs"
