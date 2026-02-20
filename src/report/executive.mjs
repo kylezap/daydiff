@@ -126,7 +126,7 @@ function buildPayload(date) {
   return payload;
 }
 
-const SYSTEM_PROMPT = `You are an executive summarizer for a daily data-diff report. Given JSON data describing adds, removes, and modifications to platform resources (applications, components, repositories, etc.) and vulnerability data, produce a concise markdown report (2–4 paragraphs) that highlights the most significant changes.
+const SYSTEM_PROMPT = `You are an executive summarizer for a daily data-diff report. Given JSON data describing adds, removes, and modifications to platform resources (applications, components, repositories, etc.) and vulnerability data, produce a concise markdown report (2–4 paragraphs) that highlights the most significant changes, along with any patterns or trends that are worth noting.
 
 Use clear section headers: ## Platform Changes and ## Vulnerability Changes.
 Focus on what changed and why it might matter to an executive audience. Be specific when sample data is provided (e.g., name specific repositories or applications that changed). If a category has no changes, say so briefly.`;

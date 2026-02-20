@@ -54,14 +54,15 @@ export default function Quality() {
         setLoading(true);
         setError(null);
         const dsId = selectedDatasetId || undefined;
+        const today = new Date().toISOString().slice(0, 10);
         const [aRes, aSumRes, popRes, flapRes, fsRes, srcRes, refRes] = await Promise.all([
-          fetchAssertions().catch(() => []),
+          fetchAssertions(today).catch(() => []),
           fetchAssertionSummary(30).catch(() => []),
           fetchPopulation(30, dsId, catParam).catch(() => []),
           fetchFlapping(dsId, 7, catParam).catch(() => []),
           fetchFieldStability(dsId, 30, catParam).catch(() => []),
           fetchSourceSegments(dsId, undefined, catParam).catch(() => []),
-          fetchReferential().catch(() => []),
+          fetchReferential(today).catch(() => []),
         ]);
         if (!cancelled) {
           setAssertions(aRes);
