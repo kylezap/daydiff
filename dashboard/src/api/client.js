@@ -52,6 +52,53 @@ export async function fetchDiffItems(id, changeType) {
 }
 
 /**
+ * Fetch IDs of all matching diff items (for cross-page selection).
+ * @returns {{ ids: number[], total: number }}
+ */
+export async function fetchDiffItemIds(id, { changeType, search } = {}) {
+  const params = {};
+  if (changeType) params.change_type = changeType;
+  if (search) params.search = search;
+  const url = new URL(`${BASE}/diffs/${id}/items/ids`, window.location.origin);
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, String(v));
+  }
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Export diff as CSV. When ids provided, exports only those rows; otherwise all matching.
+ * @returns {{ blob: Blob, filename: string }}
+ */
+export async function exportDiffCsv(id, { changeType, search, ids } = {}) {
+  const baseUrl = `${window.location.origin}${BASE}/diffs/${id}/export`;
+  let res;
+  if (ids && ids.length > 0) {
+    res = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+  } else {
+    const params = new URLSearchParams();
+    if (changeType) params.set('change_type', changeType);
+    if (search) params.set('search', search);
+    const qs = params.toString();
+    res = await fetch(`${baseUrl}${qs ? `?${qs}` : ''}`);
+  }
+  if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+  const blob = await res.blob();
+  const disp = res.headers.get('Content-Disposition') || '';
+  const m = disp.match(/filename="?([^"]+)"?/);
+  return { blob, filename: m ? m[1] : `diff-${id}.csv` };
+}
+
+/**
  * Fetch diff items with server-side pagination.
  * @returns {{ data: Array, pagination: { offset, limit, total } }}
  */

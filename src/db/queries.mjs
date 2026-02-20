@@ -489,6 +489,60 @@ export function getDiffItemsPaginated(diffId, opts = {}) {
 }
 
 /**
+ * Get IDs of diff items matching filters (lightweight, for cross-page selection).
+ *
+ * @param {number} diffId
+ * @param {object} opts
+ * @param {string|null} opts.changeType - Filter by change type
+ * @param {string|null} opts.search - Quick filter
+ * @returns {{ ids: number[], total: number }}
+ */
+export function getDiffItemIds(diffId, opts = {}) {
+  const db = getDb();
+  const { changeType = null, search = null } = opts;
+
+  const conditions = ['diff_id = ?'];
+  const params = [diffId];
+
+  if (changeType) {
+    conditions.push('change_type = ?');
+    params.push(changeType);
+  }
+  if (search) {
+    conditions.push(
+      '(row_key LIKE ? OR row_data LIKE ? OR field_changes LIKE ? OR changed_fields LIKE ?)'
+    );
+    const like = `%${search}%`;
+    params.push(like, like, like, like);
+  }
+
+  const where = conditions.join(' AND ');
+  const countRow = db.prepare(`SELECT COUNT(*) as cnt FROM diff_items WHERE ${where}`).get(...params);
+  const total = countRow.cnt;
+  const rows = db.prepare(
+    `SELECT id FROM diff_items WHERE ${where} ORDER BY change_type ASC, row_key ASC LIMIT ?`
+  ).all(...params, 1_000_000);
+  const ids = rows.map((r) => r.id);
+  return { ids, total };
+}
+
+/**
+ * Get diff items by IDs (for export-selected flow).
+ *
+ * @param {number} diffId
+ * @param {number[]} ids - Row IDs to fetch
+ * @returns {Array}
+ */
+export function getDiffItemsByIds(diffId, ids) {
+  if (!ids || ids.length === 0) return [];
+  const db = getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(
+    `SELECT * FROM diff_items WHERE diff_id = ? AND id IN (${placeholders}) ORDER BY change_type, row_key`
+  ).all(diffId, ...ids);
+}
+
+/**
  * Get aggregate summary across datasets for a given date, optionally filtered by category.
  */
 export function getSummaryForDate(date, category = null) {

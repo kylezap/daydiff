@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
 import { AllCommunityModule, themeQuartz, colorSchemeDarkBlue } from 'ag-grid-community';
 import { AgGridProvider, AgGridReact } from 'ag-grid-react';
-import { fetchDiffItemsPage } from '../api/client.js';
+import { fetchDiffItemsPage, fetchDiffItemIds, exportDiffCsv } from '../api/client.js';
 
 const modules = [AllCommunityModule];
 const darkTheme = themeQuartz.withPart(colorSchemeDarkBlue);
@@ -77,6 +77,27 @@ function formatValue(val) {
   if (val === null || val === undefined) return '';
   if (typeof val === 'object') return JSON.stringify(val);
   return String(val);
+}
+
+/** Checkbox for row selection (cross-page, managed via selectedIds). */
+function CheckboxCellRenderer({ data, colDef }) {
+  if (!data) return null;
+  const { selectedIds, onToggle } = colDef.cellRendererParams || {};
+  const id = data._id;
+  const checked = selectedIds?.has(id) ?? false;
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', height: '100%', paddingLeft: 8 }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onToggle?.(id)}
+        style={{ cursor: 'pointer', margin: 0 }}
+      />
+    </div>
+  );
 }
 
 /**
@@ -168,11 +189,12 @@ function buildGridData(items) {
 export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChange, onRowClick }) {
   const gridRef = useRef(null);
   const [rowData, setRowData] = useState([]);
-  const [columnDefs, setColumnDefs] = useState([]);
+  const [baseColumnDefs, setBaseColumnDefs] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   // Debounced search — avoid hammering server on every keystroke
   const [debouncedSearch, setDebouncedSearch] = useState(quickFilter);
@@ -181,9 +203,10 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
     return () => clearTimeout(timer);
   }, [quickFilter]);
 
-  // Reset to page 0 when filters change
+  // Reset to page 0 and clear selection when filters change
   useEffect(() => {
     setPage(0);
+    setSelectedIds(new Set());
   }, [diffId, changeType, debouncedSearch]);
 
   // Fetch page data
@@ -204,7 +227,7 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
         if (cancelled) return;
 
         const { columnDefs: cols, rowData: rows } = buildGridData(result.data);
-        setColumnDefs(cols);
+        setBaseColumnDefs(cols);
         setRowData(rows);
         setTotal(result.pagination.total);
         if (onTotalChange) onTotalChange(result.pagination.total);
@@ -218,6 +241,48 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
     loadPage();
     return () => { cancelled = true; };
   }, [diffId, page, pageSize, changeType, debouncedSearch, onTotalChange]);
+
+  const onToggle = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(async () => {
+    if (!diffId) return;
+    try {
+      const { ids } = await fetchDiffItemIds(diffId, {
+        changeType: changeType || undefined,
+        search: debouncedSearch || undefined,
+      });
+      setSelectedIds(new Set(ids));
+    } catch (err) {
+      console.error('Failed to select all:', err);
+    }
+  }, [diffId, changeType, debouncedSearch]);
+
+  const handleDeselectAll = useCallback(() => setSelectedIds(new Set()), []);
+
+  const checkboxCol = useMemo(
+    () => ({
+      field: '_select',
+      headerName: '',
+      width: 44,
+      suppressSort: true,
+      pinned: 'left',
+      cellRenderer: CheckboxCellRenderer,
+      cellRendererParams: { selectedIds, onToggle },
+    }),
+    [selectedIds, onToggle]
+  );
+
+  const columnDefs = useMemo(
+    () => [checkboxCol, ...baseColumnDefs],
+    [checkboxCol, baseColumnDefs]
+  );
 
   const totalPages = Math.ceil(total / pageSize);
 
@@ -245,37 +310,44 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
 
   const [exporting, setExporting] = useState(false);
 
-  const handleExportCsv = useCallback(async () => {
+  const downloadBlob = useCallback((blob, filename) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }, []);
+
+  const handleExportAll = useCallback(async () => {
     if (!diffId) return;
     setExporting(true);
     try {
-      const params = new URLSearchParams();
-      if (changeType) params.set('change_type', changeType);
-      if (debouncedSearch) params.set('search', debouncedSearch);
-      const qs = params.toString();
-      const url = `/api/diffs/${diffId}/export${qs ? `?${qs}` : ''}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
-      const blob = await res.blob();
-
-      // Extract filename from Content-Disposition or build a default
-      const disposition = res.headers.get('Content-Disposition') || '';
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      const filename = match ? match[1] : `diff-${diffId}.csv`;
-
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(a.href);
+      const { blob, filename } = await exportDiffCsv(diffId, {
+        changeType: changeType || undefined,
+        search: debouncedSearch || undefined,
+      });
+      downloadBlob(blob, filename);
     } catch (err) {
       console.error('CSV export failed:', err);
     } finally {
       setExporting(false);
     }
-  }, [diffId, changeType, debouncedSearch]);
+  }, [diffId, changeType, debouncedSearch, downloadBlob]);
+
+  const handleExportSelected = useCallback(async () => {
+    if (!diffId || selectedIds.size === 0) return;
+    setExporting(true);
+    try {
+      const { blob, filename } = await exportDiffCsv(diffId, { ids: Array.from(selectedIds) });
+      downloadBlob(blob, filename);
+    } catch (err) {
+      console.error('CSV export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, [diffId, selectedIds, downloadBlob]);
 
   if (!diffId) {
     return (
@@ -308,9 +380,12 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
 
         {/* Custom pagination bar */}
         <div style={paginationBar}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span style={{ color: '#8b949e', fontSize: '0.8rem' }}>
               {total.toLocaleString()} total items
+              {selectedIds.size > 0 && (
+                <span style={{ color: '#58a6ff', marginLeft: 4 }}>({selectedIds.size.toLocaleString()} selected)</span>
+              )}
             </span>
             <select
               value={pageSize}
@@ -322,13 +397,40 @@ export default function DiffGrid({ diffId, changeType, quickFilter, onTotalChang
               ))}
             </select>
             <button
-              onClick={handleExportCsv}
-              disabled={exporting || total === 0}
+              onClick={handleSelectAll}
+              disabled={loading || total === 0}
               style={exportBtnStyle}
-              title="Export all matching rows as CSV"
+              title="Select all matching rows across pages"
             >
-              {exporting ? 'Exporting…' : '⬇ Export CSV'}
+              Select all {total.toLocaleString()}
             </button>
+            <button
+              onClick={handleDeselectAll}
+              disabled={selectedIds.size === 0}
+              style={exportBtnStyle}
+              title="Clear selection"
+            >
+              Deselect all
+            </button>
+            {selectedIds.size > 0 ? (
+              <button
+                onClick={handleExportSelected}
+                disabled={exporting}
+                style={exportBtnStyle}
+                title="Export selected rows as CSV"
+              >
+                {exporting ? 'Exporting…' : `⬇ Export selected (${selectedIds.size.toLocaleString()})`}
+              </button>
+            ) : (
+              <button
+                onClick={handleExportAll}
+                disabled={exporting || total === 0}
+                style={exportBtnStyle}
+                title="Export all matching rows as CSV"
+              >
+                {exporting ? 'Exporting…' : '⬇ Export all'}
+              </button>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
