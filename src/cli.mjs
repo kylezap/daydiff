@@ -10,6 +10,8 @@ import {
   listDiffs,
   getAvailableDates,
   pruneSnapshots,
+  materializeVulnerabilityDistribution,
+  getVulnerabilitySnapshotIdsWithoutCache,
 } from './db/queries.mjs';
 import { runAssertions } from './analysis/assertions.mjs';
 import config from '../config/default.mjs';
@@ -141,10 +143,40 @@ program
       // Dynamic import to avoid loading Express unless needed
       const { startServer } = await import('./server/index.mjs');
       const port = opts.port ? parseInt(opts.port, 10) : undefined;
-      await startServer(port);
+      const server = await startServer(port);
+      // Keep server reference so process stays alive; wait until shutdown (SIGINT/SIGTERM)
+      await new Promise(() => {});
     } catch (err) {
       error(`[dashboard] Fatal error: ${err.message}`);
       process.exitCode = 1;
+    }
+  });
+
+// ─── backfill-vuln-distribution ────────────────────────────────────
+
+program
+  .command('backfill-vuln-distribution')
+  .description('Pre-compute criticality/status counts for existing vulnerability snapshots (so dashboard loads fast)')
+  .option('-d, --days <days>', 'Only backfill snapshots from the last N days (default: all)', undefined)
+  .action((opts) => {
+    try {
+      getDb();
+      const days = opts.days != null ? parseInt(opts.days, 10) : null;
+      const ids = getVulnerabilitySnapshotIdsWithoutCache(days);
+      if (ids.length === 0) {
+        log('[backfill-vuln-distribution] No vulnerability snapshots missing cache.');
+        return;
+      }
+      log(`[backfill-vuln-distribution] Materializing distribution for ${ids.length} snapshot(s)...`);
+      for (const snapshotId of ids) {
+        materializeVulnerabilityDistribution(snapshotId);
+      }
+      log('[backfill-vuln-distribution] Done.');
+    } catch (err) {
+      error(`[backfill-vuln-distribution] ${err.message}`);
+      process.exitCode = 1;
+    } finally {
+      closeDb();
     }
   });
 

@@ -177,6 +177,32 @@ export function getDb() {
     // Table doesn't exist yet — schema.sql will create it
   }
 
+  // Migration 8a: vuln_distribution_cache for pre-computed criticality/status counts
+  try {
+    const tables = _db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='vuln_distribution_cache'"
+    ).get();
+    if (!tables) {
+      console.log('[db] Creating vuln_distribution_cache table...');
+      _db.exec(`
+        CREATE TABLE IF NOT EXISTS vuln_distribution_cache (
+          fetched_date TEXT NOT NULL,
+          dataset_id INTEGER NOT NULL REFERENCES datasets(id),
+          dimension TEXT NOT NULL CHECK(dimension IN ('criticality', 'status')),
+          label TEXT NOT NULL,
+          count INTEGER NOT NULL,
+          PRIMARY KEY (fetched_date, dataset_id, dimension, label)
+        )
+      `);
+      _db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_vuln_dist_cache_date ON vuln_distribution_cache(fetched_date, dataset_id)'
+      );
+      console.log('[db] vuln_distribution_cache table created.');
+    }
+  } catch {
+    // Table doesn't exist yet — schema.sql will create it
+  }
+
   // Migration 8: rename platform datasets from lowercase to Title Case
   // Config changed applications→Applications, components→Components, repositories→Repositories.
   // Without this, ensureDataset would create NEW rows (name is unique), orphaning existing snapshots/diffs.

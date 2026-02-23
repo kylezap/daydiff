@@ -82,6 +82,18 @@ CREATE TABLE IF NOT EXISTS executive_reports (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Pre-computed vulnerability distributions (criticality/status counts per dataset per date).
+-- Populated when a vulnerability snapshot is finalized so the dashboard can read instantly.
+CREATE TABLE IF NOT EXISTS vuln_distribution_cache (
+  fetched_date TEXT NOT NULL,
+  dataset_id INTEGER NOT NULL REFERENCES datasets(id),
+  dimension TEXT NOT NULL CHECK(dimension IN ('criticality', 'status')),
+  label TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (fetched_date, dataset_id, dimension, label)
+);
+CREATE INDEX IF NOT EXISTS idx_vuln_dist_cache_date ON vuln_distribution_cache(fetched_date, dataset_id);
+
 CREATE INDEX IF NOT EXISTS idx_diffs_dates ON diffs(to_date, dataset_id);
 CREATE INDEX IF NOT EXISTS idx_diff_items_type ON diff_items(diff_id, change_type);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_key ON snapshot_rows(snapshot_id, row_key);

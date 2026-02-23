@@ -11,6 +11,7 @@ import {
   getTrend,
   getAvailableDates,
   getPopulationTrend,
+  getVulnerabilityDistributions,
   getExecutiveReport,
   getReportDates,
 } from '../db/queries.mjs';
@@ -302,6 +303,22 @@ export function setupRoutes(app) {
         dataset_id ? parseInt(dataset_id, 10) : null,
         category || null
       );
+      res.json({ data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/vulnerability/distribution ───────────────────────
+  // Returns aggregated criticality/severity and status distributions
+  // from snapshot rows for a given date.
+  app.get('/api/vulnerability/distribution', (req, res) => {
+    try {
+      const { date, category } = req.query;
+      if (!date) {
+        return res.status(400).json({ error: 'date is required' });
+      }
+      const data = getVulnerabilityDistributions(date, category || null);
       res.json({ data });
     } catch (err) {
       res.status(500).json({ error: err.message });

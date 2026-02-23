@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import SummaryCards from '../components/SummaryCards.jsx';
 import { ChangeDistributionChart, TrendChart } from '../components/DiffChart.jsx';
 import DatePicker from '../components/DatePicker.jsx';
-import { fetchDates, fetchSummary, fetchTrend, fetchDiffs, fetchDatasets } from '../api/client.js';
+import {
+  fetchDates,
+  fetchSummary,
+  fetchTrend,
+  fetchDiffs,
+  fetchDatasets,
+  fetchPopulation,
+  fetchVulnerabilityDistribution,
+} from '../api/client.js';
 
 const TITLES = {
   platform: 'Platform Overview',
@@ -18,6 +26,8 @@ export default function Overview({ category }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [summary, setSummary] = useState([]);
   const [trend, setTrend] = useState([]);
+  const [population, setPopulation] = useState([]);
+  const [vulnerabilityDistribution, setVulnerabilityDistribution] = useState({ criticality: [], status: [] });
   const [filteredTrendData, setFilteredTrendData] = useState([]);
   const [filteredTrendLoading, setFilteredTrendLoading] = useState(false);
   const [diffs, setDiffs] = useState([]);
@@ -74,15 +84,22 @@ export default function Overview({ category }) {
     let cancelled = false;
     async function loadDate() {
       try {
-        const [summaryResult, trendData, diffList] = await Promise.all([
+        const vulnDistributionPromise = category === 'vulnerability'
+          ? fetchVulnerabilityDistribution(selectedDate, category, { signal: ac.signal }).catch(() => ({ criticality: [], status: [] }))
+          : Promise.resolve({ criticality: [], status: [] });
+        const [summaryResult, trendData, diffList, populationData, vulnDistribution] = await Promise.all([
           fetchSummary(selectedDate, category, { signal: ac.signal }),
           fetchTrend(30, null, category, { signal: ac.signal }),
           fetchDiffs(null, 90, category, { signal: ac.signal }),
+          fetchPopulation(90, null, category).catch(() => []),
+          vulnDistributionPromise,
         ]);
         if (cancelled) return;
         setSummary(summaryResult.data || []);
         setTrend(trendData);
         setDiffs(diffList);
+        setPopulation(populationData || []);
+        setVulnerabilityDistribution(vulnDistribution || { criticality: [], status: [] });
       } catch (err) {
         if (!cancelled && err.name !== 'AbortError') setError(err.message);
       }
@@ -145,6 +162,86 @@ export default function Overview({ category }) {
   }, [selectedDatasetIds, category]);
 
   const hasFilter = selectedDatasetIds.size > 0;
+
+  const populationForDate = useMemo(() => {
+    if (!selectedDate) return [];
+    return population.filter((row) => {
+      if (row.fetched_date !== selectedDate) return false;
+      return hasFilter ? selectedDatasetIds.has(row.dataset_id) : true;
+    });
+  }, [population, selectedDate, hasFilter, selectedDatasetIds]);
+
+  const coverageStats = useMemo(() => {
+    const comparableRows = populationForDate.filter((row) => row.api_total != null);
+    const expectedTotal = comparableRows.reduce((sum, row) => sum + (row.api_total || 0), 0);
+    const receivedTotal = comparableRows.reduce((sum, row) => sum + (row.row_count || 0), 0);
+    const pct = expectedTotal > 0 ? (receivedTotal / expectedTotal) * 100 : null;
+    return {
+      expectedTotal,
+      receivedTotal,
+      pct,
+      comparableCount: comparableRows.length,
+      totalCount: populationForDate.length,
+      datasets: comparableRows
+        .map((row) => {
+          const expected = row.api_total || 0;
+          const received = row.row_count || 0;
+          const rowPct = expected > 0 ? (received / expected) * 100 : 0;
+          return {
+            dataset_name: row.dataset_name,
+            expected,
+            received,
+            gap: received - expected,
+            pct: rowPct,
+          };
+        })
+        .sort((a, b) => a.pct - b.pct),
+    };
+  }, [populationForDate]);
+
+  const coverageTrend = useMemo(() => {
+    const byDate = new Map();
+    for (const row of population) {
+      if (hasFilter && !selectedDatasetIds.has(row.dataset_id)) continue;
+      if (row.api_total == null) continue;
+      if (!byDate.has(row.fetched_date)) {
+        byDate.set(row.fetched_date, { date: row.fetched_date, expected: 0, received: 0 });
+      }
+      const d = byDate.get(row.fetched_date);
+      d.expected += row.api_total || 0;
+      d.received += row.row_count || 0;
+    }
+    return [...byDate.values()]
+      .map((d) => ({
+        date: d.date,
+        pct: d.expected > 0 ? (d.received / d.expected) * 100 : null,
+      }))
+      .filter((d) => d.pct != null)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-7);
+  }, [population, hasFilter, selectedDatasetIds]);
+
+  const criticalityDistribution = useMemo(() => {
+    if (category !== 'vulnerability') return [];
+    return aggregateDistribution(
+      vulnerabilityDistribution.criticality,
+      hasFilter,
+      selectedDatasetIds,
+      ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNKNOWN'],
+      true
+    );
+  }, [category, vulnerabilityDistribution, hasFilter, selectedDatasetIds]);
+
+  const statusDistribution = useMemo(() => {
+    if (category !== 'vulnerability') return [];
+    return aggregateDistribution(
+      vulnerabilityDistribution.status,
+      hasFilter,
+      selectedDatasetIds,
+      ['detected', 'in_progress', 'resolved', 'reopened', 'unknown'],
+      false
+    );
+  }, [category, vulnerabilityDistribution, hasFilter, selectedDatasetIds]);
 
   // Filter summary to selected datasets (for cards + distribution chart)
   const filteredSummary = useMemo(() => {
@@ -242,6 +339,125 @@ export default function Overview({ category }) {
 
       {/* Summary cards — filtered */}
       <SummaryCards summary={filteredSummary} />
+
+      {category === 'vulnerability' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+          <div style={panelStyle}>
+            <h3 style={panelTitle}>Criticality Distribution</h3>
+            <DistributionBars
+              rows={criticalityDistribution}
+              colorByLabel={criticalityColors}
+              formatLabel={(label) => label}
+              emptyText="No criticality data for this date."
+            />
+          </div>
+          <div style={panelStyle}>
+            <h3 style={panelTitle}>Status Distribution</h3>
+            <DistributionBars
+              rows={statusDistribution}
+              colorByLabel={statusColors}
+              formatLabel={(label) => label.replaceAll('_', ' ')}
+              emptyText="No status data for this date."
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Expected vs received population quality */}
+      <div style={{ ...panelStyle, marginTop: '1.5rem' }}>
+        <h3 style={panelTitle}>Expected vs Received Records</h3>
+        {populationForDate.length === 0 ? (
+          <div style={{ color: '#8b949e', padding: '0.75rem 0' }}>
+            No population snapshot data for {selectedDate}.
+          </div>
+        ) : coverageStats.comparableCount === 0 ? (
+          <div style={{ color: '#8b949e', padding: '0.75rem 0' }}>
+            Snapshot data exists, but API expected totals are missing for this date.
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              <div style={metricChip}>
+                <div style={metricLabel}>Received</div>
+                <div style={metricValue}>{coverageStats.receivedTotal.toLocaleString()}</div>
+              </div>
+              <div style={metricChip}>
+                <div style={metricLabel}>Expected</div>
+                <div style={metricValue}>{coverageStats.expectedTotal.toLocaleString()}</div>
+              </div>
+              <div style={metricChip}>
+                <div style={metricLabel}>Coverage</div>
+                <div style={metricValue}>{coverageStats.pct.toFixed(1)}%</div>
+              </div>
+              <div style={{ ...metricChip, minWidth: 220 }}>
+                <div style={metricLabel}>7-Day Coverage Trend</div>
+                <CoverageSparkline data={coverageTrend} />
+              </div>
+            </div>
+
+            <div style={coverageTrack}>
+              <div
+                style={{
+                  ...coverageFill,
+                  width: `${Math.max(0, Math.min(100, coverageStats.pct))}%`,
+                  background: coverageStats.pct >= 98 ? '#3fb950' : coverageStats.pct >= 90 ? '#e3b341' : '#f85149',
+                }}
+              />
+            </div>
+
+            <div style={{ color: '#8b949e', fontSize: '0.8rem', marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+              Using {coverageStats.comparableCount}/{coverageStats.totalCount} datasets with API totals.
+            </div>
+
+            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Dataset</th>
+                    <th style={thStyle}>Received</th>
+                    <th style={thStyle}>Expected</th>
+                    <th style={thStyle}>Gap</th>
+                    <th style={thStyle}>Coverage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coverageStats.datasets.map((row) => (
+                    <tr key={row.dataset_name} style={trStyle}>
+                      <td style={tdStyle}>{row.dataset_name}</td>
+                      <td style={{ ...tdStyle, fontVariantNumeric: 'tabular-nums' }}>{row.received.toLocaleString()}</td>
+                      <td style={{ ...tdStyle, fontVariantNumeric: 'tabular-nums' }}>{row.expected.toLocaleString()}</td>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: row.gap < 0 ? '#f85149' : '#3fb950',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        {row.gap >= 0 ? '+' : ''}
+                        {row.gap.toLocaleString()}
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={rowCoverageTrack}>
+                          <div
+                            style={{
+                              ...rowCoverageFill,
+                              width: `${Math.max(0, Math.min(100, row.pct))}%`,
+                              background: row.pct >= 98 ? '#3fb950' : row.pct >= 90 ? '#e3b341' : '#f85149',
+                            }}
+                          />
+                        </div>
+                        <div style={{ color: '#8b949e', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                          {row.pct.toFixed(1)}%
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Charts — filtered */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
@@ -434,4 +650,179 @@ const checkboxStyle = {
   width: 15,
   height: 15,
   accentColor: '#58a6ff',
+};
+
+const metricChip = {
+  background: '#0d1117',
+  border: '1px solid #30363d',
+  borderRadius: 8,
+  padding: '0.5rem 0.75rem',
+  minWidth: 130,
+};
+
+const metricLabel = {
+  color: '#8b949e',
+  fontSize: '0.75rem',
+  marginBottom: '0.2rem',
+};
+
+const metricValue = {
+  color: '#e1e4e8',
+  fontSize: '1rem',
+  fontWeight: 600,
+  fontVariantNumeric: 'tabular-nums',
+};
+
+const coverageTrack = {
+  width: '100%',
+  height: 10,
+  background: '#21262d',
+  borderRadius: 999,
+  overflow: 'hidden',
+  border: '1px solid #30363d',
+};
+
+const coverageFill = {
+  height: '100%',
+  transition: 'width 0.2s ease',
+};
+
+const rowCoverageTrack = {
+  width: '100%',
+  maxWidth: 180,
+  height: 8,
+  background: '#21262d',
+  borderRadius: 999,
+  overflow: 'hidden',
+  border: '1px solid #30363d',
+};
+
+const rowCoverageFill = {
+  height: '100%',
+  transition: 'width 0.2s ease',
+};
+
+function CoverageSparkline({ data }) {
+  if (!data || data.length === 0) {
+    return <div style={{ color: '#8b949e', fontSize: '0.75rem' }}>No trend data</div>;
+  }
+
+  const width = 170;
+  const height = 36;
+  const padding = 3;
+  const values = data.map((d) => d.pct);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const span = Math.max(0.0001, maxV - minV);
+
+  const points = values.map((v, i) => {
+    const x = padding + (i * (width - padding * 2)) / Math.max(1, values.length - 1);
+    const y = padding + ((maxV - v) / span) * (height - padding * 2);
+    return [x, y];
+  });
+
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ');
+  const last = values[values.length - 1];
+  const color = last >= 98 ? '#3fb950' : last >= 90 ? '#e3b341' : '#f85149';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Coverage sparkline">
+        <line x1={0} y1={height - 1} x2={width} y2={height - 1} stroke="#30363d" strokeWidth="1" />
+        <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div style={{ color, fontSize: '0.78rem', fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>
+        {last.toFixed(1)}%
+      </div>
+    </div>
+  );
+}
+
+function aggregateDistribution(rows, hasFilter, selectedDatasetIds, preferredOrder, upperCaseLabel) {
+  if (!rows || rows.length === 0) return [];
+  const totals = new Map();
+  for (const row of rows) {
+    if (hasFilter && !selectedDatasetIds.has(row.dataset_id)) continue;
+    const raw = typeof row.label === 'string' ? row.label : 'unknown';
+    const normalized = upperCaseLabel ? raw.toUpperCase() : raw.toLowerCase();
+    totals.set(normalized, (totals.get(normalized) || 0) + (row.count || 0));
+  }
+
+  const arr = [...totals.entries()].map(([label, count]) => ({ label, count }));
+  const orderRank = new Map(preferredOrder.map((label, idx) => [label, idx]));
+  arr.sort((a, b) => {
+    const aRank = orderRank.has(a.label) ? orderRank.get(a.label) : Number.MAX_SAFE_INTEGER;
+    const bRank = orderRank.has(b.label) ? orderRank.get(b.label) : Number.MAX_SAFE_INTEGER;
+    if (aRank !== bRank) return aRank - bRank;
+    return b.count - a.count;
+  });
+  return arr;
+}
+
+function DistributionBars({ rows, colorByLabel, formatLabel, emptyText }) {
+  if (!rows || rows.length === 0) {
+    return <div style={{ color: '#8b949e', padding: '1rem 0.25rem' }}>{emptyText}</div>;
+  }
+
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      {rows.map((row) => {
+        const pct = total > 0 ? (row.count / total) * 100 : 0;
+        const color = colorByLabel[row.label] || '#58a6ff';
+        return (
+          <div key={row.label}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+              <div style={{ color: '#e1e4e8', fontSize: '0.82rem', textTransform: 'capitalize' }}>
+                {formatLabel(row.label)}
+              </div>
+              <div style={{ color: '#8b949e', fontSize: '0.78rem', fontVariantNumeric: 'tabular-nums' }}>
+                {row.count.toLocaleString()} ({pct.toFixed(1)}%)
+              </div>
+            </div>
+            <div style={distributionTrack}>
+              <div
+                style={{
+                  ...distributionFill,
+                  width: `${Math.max(0, Math.min(100, pct))}%`,
+                  background: color,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const criticalityColors = {
+  CRITICAL: '#f85149',
+  HIGH: '#ff7b72',
+  MEDIUM: '#e3b341',
+  LOW: '#3fb950',
+  INFO: '#58a6ff',
+  UNKNOWN: '#8b949e',
+};
+
+const statusColors = {
+  detected: '#f85149',
+  in_progress: '#e3b341',
+  resolved: '#3fb950',
+  reopened: '#ff7b72',
+  unknown: '#8b949e',
+};
+
+const distributionTrack = {
+  width: '100%',
+  height: 10,
+  background: '#21262d',
+  borderRadius: 999,
+  border: '1px solid #30363d',
+  overflow: 'hidden',
+};
+
+const distributionFill = {
+  height: '100%',
+  transition: 'width 0.2s ease',
 };

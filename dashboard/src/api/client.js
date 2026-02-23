@@ -130,6 +130,11 @@ export async function fetchPopulation(days, datasetId, category) {
   return data;
 }
 
+export async function fetchVulnerabilityDistribution(date, category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/vulnerability/distribution`, { date, category }, options);
+  return data;
+}
+
 export async function fetchFlapping(datasetId, days, category) {
   const { data } = await apiFetch(`${BASE}/quality/flapping`, { dataset_id: datasetId, days, category });
   return data;

@@ -187,6 +187,14 @@ export function finalizeSnapshot(snapshotId, apiTotal = null, fetchWarnings = nu
     WHERE id = ?
   `).run(rowCount, apiTotal, fetchWarnings, snapshotId);
 
+  // Pre-compute vulnerability distribution for this snapshot so the dashboard can read instantly
+  const meta = db.prepare(
+    'SELECT s.dataset_id, s.fetched_date, ds.category FROM snapshots s JOIN datasets ds ON ds.id = s.dataset_id WHERE s.id = ?'
+  ).get(snapshotId);
+  if (meta && meta.category === 'vulnerability') {
+    materializeVulnerabilityDistribution(snapshotId);
+  }
+
   return { rowCount };
 }
 
@@ -782,4 +790,169 @@ export function getPopulationTrend(days = 30, datasetId = null, category = null)
     ORDER BY s.fetched_date DESC, ds.name ASC
     LIMIT ?
   `).all(...params, days * 20); // generous limit for multiple datasets
+}
+
+/**
+ * Pre-compute criticality and status counts for a vulnerability snapshot and store in vuln_distribution_cache.
+ * Called from finalizeSnapshot when the snapshot's dataset category is 'vulnerability'.
+ *
+ * @param {number} snapshotId
+ */
+export function materializeVulnerabilityDistribution(snapshotId) {
+  const db = getDb();
+  const snap = db.prepare(
+    'SELECT dataset_id, fetched_date FROM snapshots WHERE id = ?'
+  ).get(snapshotId);
+  if (!snap) return;
+
+  const criticalityRows = db.prepare(`
+    SELECT
+      UPPER(
+        COALESCE(
+          NULLIF(TRIM(json_extract(sr.row_data, '$.criticality')), ''),
+          NULLIF(TRIM(json_extract(sr.row_data, '$.severity')), ''),
+          'unknown'
+        )
+      ) AS label,
+      COUNT(*) AS count
+    FROM snapshot_rows sr
+    WHERE sr.snapshot_id = ?
+    GROUP BY label
+  `).all(snapshotId);
+
+  const statusRows = db.prepare(`
+    SELECT
+      LOWER(
+        COALESCE(
+          NULLIF(TRIM(json_extract(sr.row_data, '$.status')), ''),
+          'unknown'
+        )
+      ) AS label,
+      COUNT(*) AS count
+    FROM snapshot_rows sr
+    WHERE sr.snapshot_id = ?
+    GROUP BY label
+  `).all(snapshotId);
+
+  const insert = db.prepare(`
+    INSERT INTO vuln_distribution_cache (fetched_date, dataset_id, dimension, label, count)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  db.transaction(() => {
+    db.prepare(
+      'DELETE FROM vuln_distribution_cache WHERE fetched_date = ? AND dataset_id = ?'
+    ).run(snap.fetched_date, snap.dataset_id);
+    for (const row of criticalityRows) {
+      insert.run(snap.fetched_date, snap.dataset_id, 'criticality', row.label, row.count);
+    }
+    for (const row of statusRows) {
+      insert.run(snap.fetched_date, snap.dataset_id, 'status', row.label, row.count);
+    }
+  })();
+}
+
+/**
+ * Return snapshot IDs for vulnerability snapshots that do not yet have vuln_distribution_cache entries.
+ * Used by backfill-vuln-distribution CLI. Optionally limit to recent days.
+ *
+ * @param {number|null} days - If set, only snapshots with fetched_date >= (today - days)
+ * @returns {number[]} snapshot IDs
+ */
+export function getVulnerabilitySnapshotIdsWithoutCache(days = null) {
+  const db = getDb();
+  let conditions =
+    "ds.category = 'vulnerability' AND NOT EXISTS (SELECT 1 FROM vuln_distribution_cache v WHERE v.fetched_date = s.fetched_date AND v.dataset_id = s.dataset_id)";
+  const params = [];
+  if (days != null) {
+    conditions += " AND s.fetched_date >= date('now', ?)";
+    params.push(`-${days} days`);
+  }
+  const rows = db.prepare(
+    `SELECT s.id FROM snapshots s JOIN datasets ds ON ds.id = s.dataset_id WHERE ${conditions}`
+  ).all(...params);
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Get vulnerability field distributions for a specific date.
+ * Reads from vuln_distribution_cache when available (fast); falls back to aggregating
+ * snapshot_rows for dates that were fetched before the cache existed.
+ *
+ * @param {string} date - Snapshot date (YYYY-MM-DD)
+ * @param {string|null} category - Optional dataset category filter
+ * @returns {{ criticality: Array<{dataset_id:number,label:string,count:number}>, status: Array<{dataset_id:number,label:string,count:number}> }}
+ */
+export function getVulnerabilityDistributions(date, category = null) {
+  const db = getDb();
+  let conditions = ['v.fetched_date = ?'];
+  const params = [date];
+  if (category) {
+    conditions.push('ds.category = ?');
+    params.push(category);
+  }
+  const where = conditions.join(' AND ');
+
+  const cached = db.prepare(`
+    SELECT v.dataset_id, v.dimension, v.label, v.count
+    FROM vuln_distribution_cache v
+    JOIN datasets ds ON ds.id = v.dataset_id
+    WHERE ${where}
+  `).all(...params);
+
+  if (cached.length > 0) {
+    const criticality = cached
+      .filter((r) => r.dimension === 'criticality')
+      .map((r) => ({ dataset_id: r.dataset_id, label: r.label, count: r.count }));
+    const status = cached
+      .filter((r) => r.dimension === 'status')
+      .map((r) => ({ dataset_id: r.dataset_id, label: r.label, count: r.count }));
+    return { criticality, status };
+  }
+
+  // Fallback: aggregate from snapshot_rows (slow for large datasets)
+  const liveConditions = ['s.fetched_date = ?'];
+  const liveParams = [date];
+  if (category) {
+    liveConditions.push('ds.category = ?');
+    liveParams.push(category);
+  }
+  const liveWhere = `WHERE ${liveConditions.join(' AND ')}`;
+
+  const criticality = db.prepare(`
+    SELECT
+      s.dataset_id,
+      UPPER(
+        COALESCE(
+          NULLIF(TRIM(json_extract(sr.row_data, '$.criticality')), ''),
+          NULLIF(TRIM(json_extract(sr.row_data, '$.severity')), ''),
+          'unknown'
+        )
+      ) AS label,
+      COUNT(*) AS count
+    FROM snapshot_rows sr
+    JOIN snapshots s ON s.id = sr.snapshot_id
+    JOIN datasets ds ON ds.id = s.dataset_id
+    ${liveWhere}
+    GROUP BY s.dataset_id, label
+  `).all(...liveParams);
+
+  const status = db.prepare(`
+    SELECT
+      s.dataset_id,
+      LOWER(
+        COALESCE(
+          NULLIF(TRIM(json_extract(sr.row_data, '$.status')), ''),
+          'unknown'
+        )
+      ) AS label,
+      COUNT(*) AS count
+    FROM snapshot_rows sr
+    JOIN snapshots s ON s.id = sr.snapshot_id
+    JOIN datasets ds ON ds.id = s.dataset_id
+    ${liveWhere}
+    GROUP BY s.dataset_id, label
+  `).all(...liveParams);
+
+  return { criticality, status };
 }
