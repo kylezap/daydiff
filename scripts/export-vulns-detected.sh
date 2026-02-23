@@ -3,7 +3,7 @@
 # Export application vulnerabilities with status "detected" to CSV.
 #
 # Optimized for large result sets (~25k–30k rows): single API filter (status=detected),
-# stream-to-file (constant memory), and larger page size to minimize round-trips.
+# stream-to-file (constant memory), single-pass sequential pagination.
 #
 # Usage:
 #   ./export-vulns-detected.sh
@@ -156,6 +156,8 @@ fetch_detected_to_csv() {
   local pag
   pag=$(extract_pagination "$first_body")
   total="${pag%%|*}"
+  page_size="${pag##*|}"
+  [[ -z "$page_size" ]] || [[ "$page_size" = "0" ]] && page_size="$3"
 
   local count
   count=$(echo "$first_rows" | jq 'length')
@@ -171,7 +173,7 @@ fetch_detected_to_csv() {
     write_csv_rows "$keys" "$first_rows"
   } > "$out_file"
 
-  echo "[fetch] $total total, page size $page_size, streaming to $out_file" >&2
+  echo "[fetch] $total total, page size $page_size, streaming to $out_file (single-pass)" >&2
   echo "[fetch] 1/$total rows written" >&2
 
   offset=$page_size
@@ -187,7 +189,7 @@ fetch_detected_to_csv() {
       break
     fi
     write_csv_rows "$keys" "$page_rows" >> "$out_file"
-    offset=$((offset + page_count))
+    offset=$((offset + page_size))
     local written
     written=$((offset < total ? offset : total))
     if [[ $((iter % 5)) -eq 0 ]] || [[ $offset -ge $total ]]; then
@@ -197,7 +199,7 @@ fetch_detected_to_csv() {
     ((iter++)) || true
   done
 
-  echo "[fetch] Done. Wrote $offset rows to $out_file" >&2
+  echo "[fetch] Done. Wrote to $out_file" >&2
 }
 
 # ─── Main ────────────────────────────────────────────────────────

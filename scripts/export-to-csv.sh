@@ -3,8 +3,9 @@
 # Daydiff API Export to CSV (Bash + curl)
 #
 # Fetches the same DevGrid API data as daydiff and writes one CSV per dataset.
-# Uses curl instead of Python — often works better on corporate machines where
-# Python's SSL/certificate handling fails behind TLS-inspecting proxies.
+# Uses single-pass sequential pagination (no overlap). Uses curl instead of
+# Python — often works better on corporate machines where Python's SSL
+# certificate handling fails behind TLS-inspecting proxies.
 #
 # Usage:
 #   ./export-to-csv.sh
@@ -29,7 +30,6 @@ PLATFORM_PAGE_SIZE=200
 VULN_PAGE_SIZE=250
 VULN_SEVERITIES="CRITICAL HIGH MEDIUM LOW INFO"
 MAX_ITERATIONS=2000
-OVERLAP_RATIO=0.25
 
 # Platform datasets: name|endpoint
 PLATFORM_DATASETS="Applications|/applications
@@ -154,7 +154,7 @@ json_to_csv() {
   '
 }
 
-# ─── Fetch platform dataset (paginated with overlap) ──────────────
+# ─── Fetch platform dataset (single-pass sequential pagination) ────
 fetch_platform() {
   local name="$1" endpoint="$2"
   local all_json="[]"
@@ -167,20 +167,18 @@ fetch_platform() {
   local total page_size
   total="${pag%%|*}"
   page_size="${pag##*|}"
+  [[ -z "$page_size" ]] || [[ "$page_size" = "0" ]] && page_size=$PLATFORM_PAGE_SIZE
 
   all_json=$(echo "$rows" | jq -s 'add')
   local count
   count=$(echo "$all_json" | jq 'length')
-  echo "[fetch] $name: $total total, page size $page_size" >&2
+  echo "[fetch] $name: $total total, page size $page_size (single-pass)" >&2
 
   if [[ "$total" = "0" ]] || [[ -z "$total" ]]; then
     echo "[fetch] $name: $count records (no pagination)" >&2
     echo "$all_json"
     return
   fi
-
-  local stride=$((page_size * 75 / 100))
-  [[ $stride -lt 1 ]] && stride=1
 
   local offset=$page_size iter=1
   while [[ $offset -lt $total ]] && [[ $iter -lt $MAX_ITERATIONS ]]; do
@@ -191,7 +189,7 @@ fetch_platform() {
     if [[ -z "$page_rows" ]] || [[ "$page_rows" = "null" ]]; then
       break
     fi
-    all_json=$(echo "$all_json" $page_rows | jq -s 'add | unique_by(.id)')
+    all_json=$(echo "$all_json" $page_rows | jq -s 'add')
     count=$(echo "$all_json" | jq 'length')
     if [[ $((iter % 10)) -eq 0 ]]; then
       echo "[fetch] $name: ~$count/$total (offset $offset)" >&2
@@ -199,34 +197,54 @@ fetch_platform() {
     local page_count
     page_count=$(echo "$page_rows" | jq 'length')
     [[ "$page_count" -lt "$page_size" ]] && break
-    offset=$((offset + stride))
+    offset=$((offset + page_size))
     ((iter++)) || true
   done
 
   echo "$all_json"
 }
 
-# ─── Fetch vulnerability dataset (by severity, 2 passes, dedupe) ───
+# ─── Fetch vulnerability dataset (by severity, single-pass pagination) ─
 fetch_vulnerabilities() {
   local name="$1" vulnerable_id="$2"
   local merged="{}"
   for severity in $VULN_SEVERITIES; do
-    for pass in 1 2; do
-      local body
-      body=$(api_request "/vulnerabilities" "vulnerableId=$vulnerable_id&severity=$severity&limit=$VULN_PAGE_SIZE")
-      local rows
-      rows=$(extract_rows "$body")
-      if [[ -z "$rows" ]] || [[ "$rows" = "null" ]]; then
-        continue
+    local offset=0 total=0 page_size=$VULN_PAGE_SIZE iter=1
+    local first_body
+    first_body=$(api_request "/vulnerabilities" "vulnerableId=$vulnerable_id&severity=$severity&limit=$VULN_PAGE_SIZE")
+    local rows
+    rows=$(extract_rows "$first_body")
+    local pag
+    pag=$(extract_pagination "$first_body")
+    total="${pag%%|*}"
+    page_size="${pag##*|}"
+    [[ -z "$page_size" ]] || [[ "$page_size" = "0" ]] && page_size=$VULN_PAGE_SIZE
+
+    for row in $(echo "$rows" | jq -c '.[]?'); do
+      [[ -z "$row" ]] && continue
+      merged=$(echo "$merged" "$row" | jq -s '.[1] as $r | if $r.id then .[0] + {($r.id): $r} else .[0] end')
+    done
+    if [[ "$total" = "0" ]] || [[ -z "$total" ]]; then
+      continue
+    fi
+    offset=$page_size
+    while [[ $offset -lt $total ]] && [[ $iter -lt $MAX_ITERATIONS ]]; do
+      local page_body
+      page_body=$(api_request "/vulnerabilities" "vulnerableId=$vulnerable_id&severity=$severity&limit=$VULN_PAGE_SIZE&offset=$offset")
+      local page_rows
+      page_rows=$(extract_rows "$page_body")
+      if [[ -z "$page_rows" ]] || [[ "$page_rows" = "null" ]]; then
+        break
       fi
-      for row in $(echo "$rows" | jq -c '.[]?'); do
+      for row in $(echo "$page_rows" | jq -c '.[]?'); do
         [[ -z "$row" ]] && continue
         merged=$(echo "$merged" "$row" | jq -s '.[1] as $r | if $r.id then .[0] + {($r.id): $r} else .[0] end')
       done
-      # If no rows, no point in second pass for this severity
-      local cnt
-      cnt=$(echo "$rows" | jq 'length')
-      [[ "$cnt" -eq 0 ]] && break
+      local page_count
+      page_count=$(echo "$page_rows" | jq 'length')
+      [[ "$page_count" -lt "$page_size" ]] && break
+      offset=$((offset + page_size))
+      ((iter++)) || true
     done
   done
   echo "$merged" | jq '[.[] | select(. != null)]'
