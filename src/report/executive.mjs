@@ -20,8 +20,10 @@ const MAX_SAMPLE = config.report?.maxSamplePerType ?? 5;
 
 /**
  * Extract a display name from row_data JSON. Tries name, title, id in order.
+ * @param {string|object} rowData - JSON string or parsed object
+ * @returns {string|null}
  */
-function extractDisplayName(rowData) {
+export function extractDisplayName(rowData) {
   if (!rowData) return null;
   let data;
   try {
@@ -38,8 +40,11 @@ function extractDisplayName(rowData) {
 
 /**
  * Build a short summary of field_changes for modified items.
+ * @param {string|object} fieldChanges - JSON string or parsed object
+ * @param {string|string[]} changedFields - JSON array string or array
+ * @returns {string|null}
  */
-function summarizeFieldChanges(fieldChanges, changedFields) {
+export function summarizeFieldChanges(fieldChanges, changedFields) {
   if (!fieldChanges || !changedFields) return null;
   let changes;
   try {

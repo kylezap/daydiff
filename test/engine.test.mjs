@@ -13,6 +13,8 @@ import {
   getDiff,
   getDiffItems,
 } from '../src/db/queries.mjs';
+import { computeDiff } from '../src/diff/engine.mjs';
+import { getDb } from '../src/db/index.mjs';
 
 /**
  * Simulate the diff engine pipeline: given two snapshot IDs,
@@ -319,8 +321,59 @@ describe('Diff engine integration', () => {
   });
 });
 
-// Helper to count diffs for a date pair (avoids importing getDb in test body)
-import { getDb } from '../src/db/index.mjs';
+describe('computeDiff (engine.mjs)', () => {
+  let dataset;
+
+  beforeEach(() => {
+    const ctx = setupTestDb();
+    dataset = ctx.dataset;
+  });
+
+  it('real computeDiff matches runDiffPipeline results', () => {
+    const snap1 = insertSnapshot(dataset.id, '2025-02-01', [
+      { key: 'A', data: { name: 'alpha', severity: 'HIGH' } },
+      { key: 'B', data: { name: 'beta', severity: 'LOW' } },
+      { key: 'C', data: { name: 'gamma', severity: 'MEDIUM' } },
+    ]);
+    const snap2 = insertSnapshot(dataset.id, '2025-02-02', [
+      { key: 'A', data: { name: 'alpha', severity: 'HIGH' } },
+      { key: 'B', data: { name: 'beta', severity: 'CRITICAL' } },
+      { key: 'D', data: { name: 'delta', severity: 'INFO' } },
+    ]);
+
+    const { summary, items } = computeDiff(snap1.snapshotId, snap2.snapshotId);
+
+    assert.equal(summary.added, 1);
+    assert.equal(summary.removed, 1);
+    assert.equal(summary.modified, 1);
+    assert.equal(summary.unchanged, 1);
+
+    const added = items.find(i => i.changeType === 'added');
+    assert.equal(added?.rowKey, 'D');
+    const removed = items.find(i => i.changeType === 'removed');
+    assert.equal(removed?.rowKey, 'C');
+    const modified = items.find(i => i.changeType === 'modified');
+    assert.equal(modified?.rowKey, 'B');
+    assert.deepEqual(modified?.fieldChanges?.severity, { old: 'LOW', new: 'CRITICAL' });
+  });
+
+  it('respects diffIgnoreFields', () => {
+    const meta = { diffIgnoreFields: ['updatedAt'] };
+    const snap1 = insertSnapshot(dataset.id, '2025-02-01', [
+      { key: 'x', data: { name: 'Same', updatedAt: '2025-01-01' } },
+    ], meta);
+    const snap2 = insertSnapshot(dataset.id, '2025-02-02', [
+      { key: 'x', data: { name: 'Same', updatedAt: '2025-02-02' } },
+    ], meta);
+
+    const { summary } = computeDiff(snap1.snapshotId, snap2.snapshotId, {
+      diffIgnoreFields: ['updatedAt'],
+    });
+    assert.equal(summary.modified, 0);
+    assert.equal(summary.unchanged, 1);
+  });
+});
+
 function require_getDiffCount(datasetId, fromDate, toDate) {
   return getDb().prepare(
     'SELECT COUNT(*) as cnt FROM diffs WHERE dataset_id = ? AND from_date = ? AND to_date = ?'

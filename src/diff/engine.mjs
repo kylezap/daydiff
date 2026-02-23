@@ -98,7 +98,7 @@ function buildFieldChanges(oldRow, newRow, changedFields) {
  * @param {string[]} [options.diffIgnoreFields=[]] - Keys to omit from field diff (per dataset)
  * @returns {{ summary: object, items: Array }}
  */
-function computeDiff(oldSnapId, newSnapId, options = {}) {
+export function computeDiff(oldSnapId, newSnapId, options = {}) {
   const { diffIgnoreFields = [] } = options;
   const items = [];
 
