@@ -18,6 +18,8 @@ export default function Overview({ category }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [summary, setSummary] = useState([]);
   const [trend, setTrend] = useState([]);
+  const [filteredTrendData, setFilteredTrendData] = useState([]);
+  const [filteredTrendLoading, setFilteredTrendLoading] = useState(false);
   const [diffs, setDiffs] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +91,59 @@ export default function Overview({ category }) {
     return () => { cancelled = true; ac.abort(); };
   }, [selectedDate, category]);
 
+  // When dataset filter is applied, fetch trend per selected dataset and merge by date
+  useEffect(() => {
+    if (selectedDatasetIds.size === 0) {
+      setFilteredTrendData([]);
+      return;
+    }
+    const ac = new AbortController();
+    let cancelled = false;
+    const ids = [...selectedDatasetIds];
+    async function loadFilteredTrend() {
+      setFilteredTrendLoading(true);
+      try {
+        const results = await Promise.all(
+          ids.map((id) => fetchTrend(30, id, category, { signal: ac.signal }))
+        );
+        if (cancelled) return;
+        const byDate = new Map();
+        for (const arr of results) {
+          for (const row of arr) {
+            const d = row.to_date;
+            if (!byDate.has(d)) {
+              byDate.set(d, {
+                to_date: d,
+                added_count: 0,
+                removed_count: 0,
+                modified_count: 0,
+                unchanged_count: 0,
+              });
+            }
+            const m = byDate.get(d);
+            m.added_count += row.added_count || 0;
+            m.removed_count += row.removed_count || 0;
+            m.modified_count += row.modified_count || 0;
+            m.unchanged_count += row.unchanged_count || 0;
+          }
+        }
+        const merged = [...byDate.values()].sort((a, b) =>
+          a.to_date.localeCompare(b.to_date)
+        );
+        setFilteredTrendData(merged);
+      } catch (err) {
+        if (!cancelled && err.name !== 'AbortError') setError(err.message);
+      } finally {
+        if (!cancelled) setFilteredTrendLoading(false);
+      }
+    }
+    loadFilteredTrend();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [selectedDatasetIds, category]);
+
   const hasFilter = selectedDatasetIds.size > 0;
 
   // Filter summary to selected datasets (for cards + distribution chart)
@@ -100,19 +155,8 @@ export default function Overview({ category }) {
     return summary.filter(s => selectedNames.has(s.dataset_name));
   }, [summary, selectedDatasetIds, datasets, hasFilter]);
 
-  // Filter trend to selected datasets
-  const filteredTrend = useMemo(() => {
-    if (!hasFilter) return trend;
-    const selectedNames = new Set(
-      datasets.filter(d => selectedDatasetIds.has(d.id)).map(d => d.name)
-    );
-    // Trend items have a dataset_name field — aggregate only the selected ones
-    // If trend entries don't carry dataset_name, return as-is (the API already aggregates)
-    if (trend.length > 0 && trend[0].dataset_name) {
-      return trend.filter(t => selectedNames.has(t.dataset_name));
-    }
-    return trend;
-  }, [trend, selectedDatasetIds, datasets, hasFilter]);
+  // Trend for chart: when filtered, use per-dataset fetched & merged data; otherwise use full trend
+  const trendForChart = hasFilter ? filteredTrendData : trend;
 
   // Build display label for active filter
   const totalCount = useMemo(() => {
@@ -217,10 +261,13 @@ export default function Overview({ category }) {
               </span>
             )}
           </h3>
-          {filteredTrend.length > 0
-            ? <TrendChart trend={filteredTrend} />
-            : <div style={{ color: '#8b949e', padding: '2rem', textAlign: 'center' }}>Not enough data for trend</div>
-          }
+          {filteredTrendLoading ? (
+            <div style={{ color: '#8b949e', padding: '2rem', textAlign: 'center' }}>Loading trend...</div>
+          ) : trendForChart.length > 0 ? (
+            <TrendChart trend={trendForChart} />
+          ) : (
+            <div style={{ color: '#8b949e', padding: '2rem', textAlign: 'center' }}>Not enough data for trend</div>
+          )}
         </div>
       </div>
 

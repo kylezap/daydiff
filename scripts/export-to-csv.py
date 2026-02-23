@@ -70,7 +70,7 @@ def load_env(env_path=None):
     if not Path(path).exists():
         path = Path.cwd() / ".env"
     if not Path(path).exists():
-        return
+        return None
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -78,6 +78,7 @@ def load_env(env_path=None):
                 k, v = line.split("=", 1)
                 v = v.strip().strip('"').strip("'")
                 os.environ.setdefault(k.strip(), v)
+    return str(path)
 
 
 def load_config(config_path):
@@ -129,6 +130,15 @@ def api_request(base_url, api_key, path, params=None, proxy_url=None, ca_path=No
                 raise
         except (URLError, OSError) as e:
             last_err = e
+            err_str = str(e).lower()
+            if "ssl" in err_str or "certificate" in err_str:
+                print(
+                    "[api] SSL certificate verification failed. In .env set:\n"
+                    "  CA_CERT_PATH=/path/to/corporate-ca-bundle.pem  (if behind TLS-inspecting proxy)\n"
+                    "  or STRICT_SSL=false  (last resort, disables verification)",
+                    file=sys.stderr,
+                )
+                raise
             delay = 500 * (2 ** attempt) / 1000
             print(f"[api] {e}, retry {attempt + 1}/5 in {delay:.1f}s", file=sys.stderr)
             time.sleep(delay)
@@ -293,11 +303,24 @@ def main():
     parser.add_argument("--output", "-o", help="Output directory (default: daydiff-export-YYYY-MM-DD)")
     parser.add_argument("--datasets", help="Comma-separated dataset names to fetch (whitelist)")
     parser.add_argument("--exclude", help="Comma-separated dataset names to exclude")
+    parser.add_argument("--check-env", action="store_true", help="Show which .env was loaded and verify API config")
     args = parser.parse_args()
 
-    load_env()
+    env_path = load_env()
     base_url = os.environ.get("API_BASE_URL", "").rstrip("/")
     api_key = os.environ.get("API_KEY", "")
+
+    if args.check_env:
+        def _mask(s):
+            if not s or len(s) < 8:
+                return "(empty)" if not s else "***"
+            return s[:4] + "..." + s[-2:]
+        print("[check-env] .env path:", env_path or "(not found)")
+        print("[check-env] API_BASE_URL:", base_url or "(empty)")
+        print("[check-env] API_KEY:", ("ok " + _mask(api_key)) if api_key else "(empty)")
+        print("[check-env] STRICT_SSL:", os.environ.get("STRICT_SSL", "true"))
+        print("[check-env] CA_CERT_PATH:", os.environ.get("CA_CERT_PATH") or "(not set)")
+        return
     if not base_url or not api_key:
         print("Error: API_BASE_URL and API_KEY required (set in .env or environment)", file=sys.stderr)
         sys.exit(1)
