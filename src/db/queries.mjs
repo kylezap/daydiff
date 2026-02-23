@@ -121,7 +121,7 @@ export function createEmptySnapshot(datasetId, date) {
 
 /**
  * Insert a batch of rows into an existing snapshot (streaming mode).
- * Uses INSERT OR REPLACE to handle duplicate row_keys from overlap pagination.
+ * Uses ON CONFLICT DO UPDATE so batches are idempotent; one transaction per batch.
  *
  * @param {number} snapshotId
  * @param {object[]} rows - Raw API rows (each must have rowKey field)

@@ -50,16 +50,7 @@ node src/cli.mjs install-schedule # Install macOS launchd daily job. To unload: 
 
 ## Known Issues / TODO
 
-### Pagination coverage gap (pending DevGrid fix)
-
-The DevGrid API does not support server-side sorting on paginated endpoints. Without a stable sort order, offset-based pagination is unreliable — rows shift between pages across requests, causing some records to never appear regardless of how many passes are made. Testing shows ~80% coverage on `/repositories` (11,500 of 14,089) and similar gaps on `/applications`.
-
-**Current mitigation:** Pages overlap by 10% to catch shifted rows; the `fetch-complete` assertion flags any gap between `row_count` and `api_total` on the dashboard.
-
-**Fix:** A request has been filed with the DevGrid team to add a `sort` parameter. Once available:
-1. Add the sort param (e.g., `sort=id`) to `fetchAllPages()` in `src/api/fetcher.mjs`
-2. Verify 100% coverage on `/repositories` and `/applications`
-3. Remove the overlap logic once stable pagination is confirmed
+_(None at this time. Pagination uses single-pass sequential offset; see `docs/devgrid-pagination-issue.md` for historical context.)_
 
 ## Security Notes
 

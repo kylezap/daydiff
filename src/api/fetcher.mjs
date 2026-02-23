@@ -50,27 +50,26 @@ function extractPagination(body) {
 }
 
 /**
- * Fetch all pages of a paginated DevGrid API endpoint.
+ * Fetch all pages of a paginated DevGrid API endpoint (single pass).
  *
- * When streamOptions is provided, writes each page to the DB immediately (memory bounded).
- * Otherwise accumulates all rows in memory (legacy behavior for small datasets).
+ * When streamOptions is provided, writes each page to the DB immediately (memory bounded,
+ * one batch per page — does not hold a long-lived write lock).
  *
  * Strategy:
- *   1. First request: send ONLY the user-provided params (no page/limit/offset).
- *   2. Read pagination metadata to learn page size and total count.
- *   3. Paginate using offset with overlap to handle unstable API ordering.
+ *   1. First request: user-provided params only (e.g. limit).
+ *   2. Read pagination metadata (total, page size).
+ *   3. Sequential offset pagination: offset = pageSize, then 2*pageSize, ... (no overlap).
  *
  * @param {string} endpoint
  * @param {object} params - User-provided query params (NOT pagination params)
  * @param {object} headers - Extra headers
  * @param {Function|null} transform - Optional row extraction function
  * @param {string} name - Dataset name for logging
- * @param {object} [options] - { passes, rowKey, partitionLabel, streamOptions }
+ * @param {object} [options] - { rowKey, partitionLabel, streamOptions }
  * @returns {Promise<{rows?: object[], rowCount?: number, apiTotal: number|null, warnings: string[]}>}
  */
 async function fetchAllPages(endpoint, params, headers, transform, name, options = {}) {
   const {
-    passes = 1,
     rowKey = null,
     partitionLabel = '',
     streamOptions = null,
@@ -78,152 +77,89 @@ async function fetchAllPages(endpoint, params, headers, transform, name, options
 
   const streaming = streamOptions != null;
   const diffIgnoreFields = streaming ? (streamOptions.diffIgnoreFields ?? []) : [];
+  const prefix = partitionLabel ? `[${partitionLabel}] ` : '';
+  const warnings = [];
 
-  async function doOnePass(passLabel = partitionLabel) {
-    const prefix = partitionLabel ? `[${partitionLabel}] ` : '';
-    const warnings = [];
+  const body = await apiRequest(endpoint, { params, headers });
+  const firstRows = extractRows(body, transform, name);
 
-    const body = await apiRequest(endpoint, { params, headers });
-    const firstRows = extractRows(body, transform, name);
+  if (!Array.isArray(firstRows)) {
+    throw new Error(`Transform for ${name} did not return an array`);
+  }
 
-    if (!Array.isArray(firstRows)) {
-      throw new Error(`Transform for ${name} did not return an array`);
-    }
+  const pag = extractPagination(body);
 
-    const pag = extractPagination(body);
-
-    if (!pag || pag.total === 0) {
-      if (streaming) {
-        insertSnapshotRowsBatch(streamOptions.snapshotId, firstRows, rowKey, diffIgnoreFields);
-      }
-      log(`[fetch] ${name}: ${prefix}${firstRows.length} records (no pagination metadata)`);
-      return { rows: streaming ? null : firstRows, apiTotal: null, warnings };
-    }
-
-    const total = pag.total;
-    const reportedPageSize = pag.pageSize || 100;
-    const pageSize =
-      firstRows.length > 0
-        ? Math.min(reportedPageSize, firstRows.length)
-        : reportedPageSize;
-
-    log(`[fetch] ${name}: ${prefix}${total} total records, page size ${pageSize}`);
-
+  if (!pag || pag.total === 0) {
     if (streaming) {
       insertSnapshotRowsBatch(streamOptions.snapshotId, firstRows, rowKey, diffIgnoreFields);
     }
-
-    if (firstRows.length >= total) {
-      const rows = streaming ? null : firstRows;
-      return { rows, apiTotal: total, warnings };
-    }
-
-    const OVERLAP_RATIO = 0.25;
-    const stride = Math.max(1, Math.floor(pageSize * (1 - OVERLAP_RATIO)));
-
-    let allRows = streaming ? null : [...firstRows];
-    let currentOffset = pageSize;
-    let iteration = 1;
-    const LOG_INTERVAL = 10;
-
-    while (currentOffset < total && iteration < MAX_ITERATIONS) {
-      const pageParams = { ...params, offset: currentOffset };
-
-      try {
-        const pageBody = await apiRequest(endpoint, { params: pageParams, headers });
-        const pageRows = extractRows(pageBody, transform, name);
-
-        if (!Array.isArray(pageRows) || pageRows.length === 0) break;
-
-        if (streaming) {
-          insertSnapshotRowsBatch(streamOptions.snapshotId, pageRows, rowKey, diffIgnoreFields);
-          if (iteration % LOG_INTERVAL === 0) {
-            const count = getSnapshotRowCount(streamOptions.snapshotId);
-            log(`[fetch] ${name}: ${prefix}fetched ~${count}/${total} records (offset ${currentOffset})`);
-          }
-        } else {
-          allRows = allRows.concat(pageRows);
-          log(`[fetch] ${name}: ${prefix}fetched ~${allRows.length}/${total} records (offset ${currentOffset})`);
-        }
-
-        if (pageRows.length < pageSize) break;
-
-        currentOffset += stride;
-        iteration++;
-      } catch (err) {
-        const count = streaming ? getSnapshotRowCount(streamOptions.snapshotId) : allRows.length;
-        const msg = `Pagination with offset failed (${err.message}). Got ${count}/${total} records.`;
-        warn(`[fetch] ${name}: ${prefix}${msg}`);
-        warnings.push(msg);
-        break;
-      }
-    }
-
-    if (iteration >= MAX_ITERATIONS) {
-      const msg = `Hit max iteration limit (${MAX_ITERATIONS}).`;
-      warn(`[fetch] ${name}: ${prefix}${msg}`);
-      warnings.push(msg);
-    }
-
-    return { rows: allRows, apiTotal: total, warnings };
+    log(`[fetch] ${name}: ${prefix}${firstRows.length} records (no pagination metadata)`);
+    return { rows: streaming ? null : firstRows, apiTotal: null, warnings };
   }
 
-  if (passes === 1) {
-    return doOnePass();
-  }
+  const total = pag.total;
+  const reportedPageSize = pag.pageSize || 100;
+  const pageSize =
+    firstRows.length > 0
+      ? Math.min(reportedPageSize, firstRows.length)
+      : reportedPageSize;
 
-  if (!rowKey) {
-    throw new Error(`Multi-pass fetch for ${name} requires rowKey in options`);
-  }
+  log(`[fetch] ${name}: ${prefix}${total} total records, page size ${pageSize}`);
 
   if (streaming) {
-    const allWarnings = [];
-    let apiTotal = null;
-    for (let pass = 1; pass <= passes; pass++) {
-      const beforeCount = getSnapshotRowCount(streamOptions.snapshotId);
-      const result = await doOnePass(passes > 1 ? `pass ${pass}/${passes}` : partitionLabel);
-      const afterCount = getSnapshotRowCount(streamOptions.snapshotId);
-      if (apiTotal === null) apiTotal = result.apiTotal;
-      allWarnings.push(...result.warnings);
-      if (pass > 1) {
-        const added = afterCount - beforeCount;
-        log(`[fetch] ${name}: pass ${pass} added ${added} unique records (total unique: ${afterCount})`);
-        if (added === 0) {
-          log(`[fetch] ${name}: convergence on pass ${pass}, stopping early`);
-          break;
-        }
-      }
-    }
-    return { apiTotal, warnings: allWarnings };
+    insertSnapshotRowsBatch(streamOptions.snapshotId, firstRows, rowKey, diffIgnoreFields);
   }
 
-  const merged = new Map();
-  let apiTotal = null;
-  const allWarnings = [];
-  for (let pass = 1; pass <= passes; pass++) {
-    const result = await doOnePass(passes > 1 ? `pass ${pass}/${passes}` : partitionLabel);
-    if (apiTotal === null) apiTotal = result.apiTotal;
-    allWarnings.push(...result.warnings);
-    const beforeSize = merged.size;
-    for (const row of result.rows) {
-      const key = row[rowKey];
-      if (key !== undefined && key !== null) merged.set(String(key), row);
-    }
-    const added = merged.size - beforeSize;
-    if (pass > 1) {
-      log(`[fetch] ${name}: pass ${pass} added ${added} unique records (total unique: ${merged.size})`);
-      if (added === 0) {
-        log(`[fetch] ${name}: convergence on pass ${pass}, stopping early`);
-        break;
+  if (firstRows.length >= total) {
+    const rows = streaming ? null : firstRows;
+    return { rows, apiTotal: total, warnings };
+  }
+
+  let allRows = streaming ? null : [...firstRows];
+  let currentOffset = pageSize;
+  let iteration = 1;
+  const LOG_INTERVAL = 10;
+
+  while (currentOffset < total && iteration < MAX_ITERATIONS) {
+    const pageParams = { ...params, offset: currentOffset };
+
+    try {
+      const pageBody = await apiRequest(endpoint, { params: pageParams, headers });
+      const pageRows = extractRows(pageBody, transform, name);
+
+      if (!Array.isArray(pageRows) || pageRows.length === 0) break;
+
+      if (streaming) {
+        insertSnapshotRowsBatch(streamOptions.snapshotId, pageRows, rowKey, diffIgnoreFields);
+        if (iteration % LOG_INTERVAL === 0) {
+          const count = getSnapshotRowCount(streamOptions.snapshotId);
+          log(`[fetch] ${name}: ${prefix}fetched ~${count}/${total} records (offset ${currentOffset})`);
+        }
+      } else {
+        allRows = allRows.concat(pageRows);
+        log(`[fetch] ${name}: ${prefix}fetched ~${allRows.length}/${total} records (offset ${currentOffset})`);
       }
+
+      if (pageRows.length < pageSize) break;
+
+      currentOffset += pageSize;
+      iteration++;
+    } catch (err) {
+      const count = streaming ? getSnapshotRowCount(streamOptions.snapshotId) : allRows.length;
+      const msg = `Pagination with offset failed (${err.message}). Got ${count}/${total} records.`;
+      warn(`[fetch] ${name}: ${prefix}${msg}`);
+      warnings.push(msg);
+      break;
     }
   }
-  const rows = Array.from(merged.values());
-  if (apiTotal != null && rows.length > 0) {
-    const pct = ((rows.length / apiTotal) * 100).toFixed(1);
-    log(`[fetch] ${name}: coverage ${rows.length}/${apiTotal} (${pct}%)`);
+
+  if (iteration >= MAX_ITERATIONS) {
+    const msg = `Hit max iteration limit (${MAX_ITERATIONS}).`;
+    warn(`[fetch] ${name}: ${prefix}${msg}`);
+    warnings.push(msg);
   }
-  return { rows, apiTotal, warnings: allWarnings };
+
+  return { rows: allRows, apiTotal: total, warnings };
 }
 
 /**
@@ -248,7 +184,6 @@ async function fetchDataset(datasetConfig, date) {
     paginated = true,
     category = 'platform',
     partitionBy = null,
-    passes = 1,
   } = datasetConfig;
 
   const diffIgnoreFields = datasetConfig.diffIgnoreFields ?? [];
@@ -284,7 +219,7 @@ async function fetchDataset(datasetConfig, date) {
 
   const snapshotId = createEmptySnapshot(dataset.id, date);
   const streamOptions = { snapshotId, rowKey, diffIgnoreFields };
-  const fetchOptions = { passes, rowKey, streamOptions };
+  const fetchOptions = { rowKey, streamOptions };
 
   let apiTotal = null;
   const warnings = [];

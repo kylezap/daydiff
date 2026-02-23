@@ -81,7 +81,6 @@ const vulnerabilityDatasets = assets.map(({ name, vulnerableId }) => ({
   category: 'vulnerability',
   diffIgnoreFields: ['identifiers'],
   partitionBy: { param: 'severity', values: VULN_SEVERITIES },
-  passes: 2,
 }));
 
 // ─── Combined export ────────────────────────────────────────────

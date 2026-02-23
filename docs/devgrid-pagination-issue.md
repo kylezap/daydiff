@@ -1,5 +1,9 @@
 # Pagination Issue: Unstable sort order causes incomplete data retrieval
 
+**Update:** The DevGrid API now provides stable sorting on paginated endpoints. This codebase uses **single-pass sequential pagination** (offset = 0, pageSize, 2×pageSize, …) with no overlap or multi-pass. See `src/api/fetcher.mjs`. The document below is kept for historical context and for API maintainers.
+
+---
+
 ## Summary
 
 The DevGrid API's paginated endpoints (`/applications`, `/components`, `/resources`, `/repositories`, `/vulnerabilities`) do not support server-side sorting. Without a stable sort order, offset-based pagination returns inconsistent results across requests—rows shift between pages, and some records never appear no matter how many passes are made.
