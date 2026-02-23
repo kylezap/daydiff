@@ -387,7 +387,9 @@ export default function Overview({ category }) {
               </div>
               <div style={metricChip}>
                 <div style={metricLabel}>Coverage</div>
-                <div style={metricValue}>{coverageStats.pct.toFixed(1)}%</div>
+                <div style={metricValue}>
+                  {coverageStats.pct != null ? `${coverageStats.pct.toFixed(1)}%` : '—'}
+                </div>
               </div>
               <div style={{ ...metricChip, minWidth: 220 }}>
                 <div style={metricLabel}>7-Day Coverage Trend</div>
@@ -399,8 +401,15 @@ export default function Overview({ category }) {
               <div
                 style={{
                   ...coverageFill,
-                  width: `${Math.max(0, Math.min(100, coverageStats.pct))}%`,
-                  background: coverageStats.pct >= 98 ? '#3fb950' : coverageStats.pct >= 90 ? '#e3b341' : '#f85149',
+                  width: `${Math.max(0, Math.min(100, coverageStats.pct ?? 0))}%`,
+                  background:
+                    coverageStats.pct == null
+                      ? '#8b949e'
+                      : coverageStats.pct >= 98
+                        ? '#3fb950'
+                        : coverageStats.pct >= 90
+                          ? '#e3b341'
+                          : '#f85149',
                 }}
               />
             </div>
