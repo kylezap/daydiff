@@ -148,7 +148,7 @@ const SYSTEM_PROMPT = `You are an executive summarizer for a daily data-diff rep
 
 Structure your report as follows:
 - Use clear section headers: ## Platform Changes and ## Vulnerability Changes.
-- Within each section, summarize **each dataset separately** (e.g. Applications, Components, Resources, Repositories, and each vulnerability dataset). For each dataset, state what changed: added, removed, and modified counts, and any patterns.
+- Within each section, summarize **each dataset separately** (e.g. Applications, Components, Resources, Repositories, Portfolios, and each vulnerability dataset). For each dataset, state what changed: added, removed, and modified counts, and any patterns.
 
 Use the following data when present:
 - **modified_field_patterns**: Lists which top-level fields changed most often in modified rows. Call out the fields that dominate (e.g. "most modifications touched field X").

@@ -58,6 +58,14 @@ const platformDatasets = [
     params: { limit: PLATFORM_PAGE_SIZE },
     category: 'platform',
   },
+  {
+    name: 'Portfolios',
+    endpoint: '/entities',
+    rowKey: 'id',
+    paginated: true,
+    params: { type: 'portfolio', limit: PLATFORM_PAGE_SIZE },
+    category: 'platform',
+  },
 ];
 
 // ─── Vulnerability datasets (one per tracked asset) ─────────────

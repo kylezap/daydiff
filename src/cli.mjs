@@ -30,9 +30,13 @@ program
   .command('fetch')
   .description('Fetch today\'s datasets from the API and store snapshots')
   .option('-d, --date <date>', 'Override date (YYYY-MM-DD)', undefined)
+  .option('--datasets <names>', 'Only fetch these datasets (comma-separated, e.g. Portfolios,Applications)', undefined)
   .action(async (opts) => {
     try {
-      const results = await fetchAllDatasets(opts.date);
+      const datasetFilter = opts.datasets
+        ? opts.datasets.split(',').map(s => s.trim()).filter(Boolean)
+        : null;
+      const results = await fetchAllDatasets(opts.date, datasetFilter);
       const failed = results.filter(r => r.error);
       if (failed.length > 0) {
         process.exitCode = 1;

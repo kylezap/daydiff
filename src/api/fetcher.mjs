@@ -288,13 +288,26 @@ async function safeFetchDataset(ds, fetchDate) {
  * vulnerability datasets one at a time to avoid overwhelming the API.
  *
  * @param {string} [date] - Override date (default: today)
+ * @param {string[]} [datasetNames] - If provided, only fetch these dataset names (e.g. ['Portfolios'])
  * @returns {Promise<Array<{dataset: string, rowCount: number, snapshotId: number}>>}
  */
-export async function fetchAllDatasets(date) {
+export async function fetchAllDatasets(date, datasetNames = null) {
   const fetchDate = date || today();
 
-  const platformDs = datasets.filter(ds => ds.category === 'platform');
-  const vulnDs = datasets.filter(ds => ds.category !== 'platform');
+  let platformDs = datasets.filter(ds => ds.category === 'platform');
+  let vulnDs = datasets.filter(ds => ds.category !== 'platform');
+
+  if (datasetNames && datasetNames.length > 0) {
+    const set = new Set(datasetNames.map(n => n.trim()));
+    platformDs = platformDs.filter(ds => set.has(ds.name));
+    vulnDs = vulnDs.filter(ds => set.has(ds.name));
+    const found = platformDs.length + vulnDs.length;
+    if (found === 0) {
+      log(`[fetch] No configured datasets match: ${datasetNames.join(', ')}`);
+      return [];
+    }
+    log(`[fetch] Filtering to ${found} dataset(s): ${[...platformDs, ...vulnDs].map(d => d.name).join(', ')}`);
+  }
 
   log(`\n[fetch] Starting fetch for ${fetchDate}`);
   log(`[fetch] ${datasets.length} dataset(s): ${platformDs.length} platform (parallel), ${vulnDs.length} vulnerability (sequential)\n`);
@@ -315,7 +328,8 @@ export async function fetchAllDatasets(date) {
 
   const results = [...platformResults, ...vulnResults];
   const successCount = results.filter(r => !r.error).length;
-  log(`\n[fetch] Complete: ${successCount}/${datasets.length} datasets fetched successfully`);
+  const totalRequested = platformDs.length + vulnDs.length;
+  log(`\n[fetch] Complete: ${successCount}/${totalRequested} datasets fetched successfully`);
 
   return results;
 }

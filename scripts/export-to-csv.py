@@ -39,6 +39,7 @@ PLATFORM_DATASETS = [
     {"name": "Components", "endpoint": "/components", "params": {"limit": PLATFORM_PAGE_SIZE}},
     {"name": "Resources", "endpoint": "/resources", "params": {"limit": PLATFORM_PAGE_SIZE}},
     {"name": "Repositories", "endpoint": "/repositories", "params": {"limit": PLATFORM_PAGE_SIZE}},
+    {"name": "Portfolios", "endpoint": "/entities", "params": {"type": "portfolio", "limit": PLATFORM_PAGE_SIZE}},
 ]
 
 def try_load_assets_from_mjs():

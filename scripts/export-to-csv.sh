@@ -31,11 +31,12 @@ VULN_PAGE_SIZE=250
 VULN_SEVERITIES="CRITICAL HIGH MEDIUM LOW INFO"
 MAX_ITERATIONS=2000
 
-# Platform datasets: name|endpoint
+# Platform datasets: name|endpoint or name|endpoint|extra_query (extra_query is optional, e.g. type=portfolio)
 PLATFORM_DATASETS="Applications|/applications
 Components|/components
 Resources|/resources
-Repositories|/repositories"
+Repositories|/repositories
+Portfolios|/entities|type=portfolio"
 
 # Assets: name|vulnerableId (from config/assets.mjs)
 ASSETS="Digital One Flex (17040)|7d53603e-0973-437d-a3da-a129cb8108ef
@@ -156,10 +157,12 @@ json_to_csv() {
 
 # ─── Fetch platform dataset (single-pass sequential pagination) ────
 fetch_platform() {
-  local name="$1" endpoint="$2"
+  local name="$1" endpoint="$2" extra_params="$3"
   local all_json="[]"
   local first_body
-  first_body=$(api_request "$endpoint" "limit=$PLATFORM_PAGE_SIZE")
+  local base_params="limit=$PLATFORM_PAGE_SIZE"
+  [[ -n "$extra_params" ]] && base_params="${extra_params}&${base_params}"
+  first_body=$(api_request "$endpoint" "$base_params")
   local rows
   rows=$(extract_rows "$first_body")
   local pag
@@ -183,7 +186,7 @@ fetch_platform() {
   local offset=$page_size iter=1
   while [[ $offset -lt $total ]] && [[ $iter -lt $MAX_ITERATIONS ]]; do
     local page_body
-    page_body=$(api_request "$endpoint" "limit=$PLATFORM_PAGE_SIZE&offset=$offset")
+    page_body=$(api_request "$endpoint" "${base_params}&offset=$offset")
     local page_rows
     page_rows=$(extract_rows "$page_body")
     if [[ -z "$page_rows" ]] || [[ "$page_rows" = "null" ]]; then
@@ -300,7 +303,7 @@ main() {
   echo ""
 
   # Platform datasets
-  while IFS='|' read -r name endpoint; do
+  while IFS='|' read -r name endpoint extra_params; do
     if [[ -n "$datasets_filter" ]]; then
       if [[ ",$datasets_filter," != *",$name,"* ]]; then
         continue
@@ -313,7 +316,7 @@ main() {
     fi
     echo "[fetch] $name..."
     local rows
-    rows=$(fetch_platform "$name" "$endpoint")
+    rows=$(fetch_platform "$name" "$endpoint" "$extra_params")
     local out_file="$output_dir/$(sanitize_filename "$name").csv"
     if [[ -n "$rows" ]] && [[ "$rows" != "[]" ]]; then
       echo "$rows" | json_to_csv > "$out_file"
