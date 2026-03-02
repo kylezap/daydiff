@@ -99,6 +99,27 @@ export function getFieldStability(datasetId = null, days = 30, category = null) 
   `).all(...params);
 }
 
+/**
+ * Per-diff aggregation: which top-level fields changed in modified rows for a single diff.
+ * Used by the executive report for pattern analysis.
+ *
+ * @param {number} diffId - diff id
+ * @returns {Array<{field_name: string, change_count: number}>}
+ */
+export function getModifiedFieldCountsByDiff(diffId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT
+      TRIM(j.value, '"') AS field_name,
+      COUNT(*) AS change_count
+    FROM diff_items di
+    JOIN json_each(di.changed_fields) j
+    WHERE di.diff_id = ? AND di.change_type = 'modified' AND di.changed_fields IS NOT NULL
+    GROUP BY TRIM(j.value, '"')
+    ORDER BY change_count DESC
+  `).all(diffId);
+}
+
 // ─── Source-System Segmentation ──────────────────────────────────
 
 /**

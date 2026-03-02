@@ -99,3 +99,12 @@ CREATE INDEX IF NOT EXISTS idx_diff_items_type ON diff_items(diff_id, change_typ
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_key ON snapshot_rows(snapshot_id, row_key);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_hash ON snapshot_rows(snapshot_id, row_key, row_hash);
 CREATE INDEX IF NOT EXISTS idx_assertion_date ON assertion_results(checked_date, assertion_id);
+
+-- Pre-computed field/path change counts per diff (populated after each diff run when modified_count > 0).
+CREATE TABLE IF NOT EXISTS diff_field_change_counts (
+  diff_id INTEGER NOT NULL REFERENCES diffs(id) ON DELETE CASCADE,
+  field_path TEXT NOT NULL,
+  change_count INTEGER NOT NULL,
+  PRIMARY KEY (diff_id, field_path)
+);
+CREATE INDEX IF NOT EXISTS idx_diff_field_counts_diff ON diff_field_change_counts(diff_id);

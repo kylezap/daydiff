@@ -46,6 +46,15 @@ export async function fetchDiff(id) {
   return data;
 }
 
+/**
+ * Fetch field/path change counts for a diff (top-level and nested).
+ * @returns {{ topLevel: Array<{field_path: string, change_count: number}>, nested: Array<{field_path: string, change_count: number}> }}
+ */
+export async function fetchDiffFieldChanges(id) {
+  const { data } = await apiFetch(`${BASE}/diffs/${id}/field-changes`);
+  return data;
+}
+
 export async function fetchDiffItems(id, changeType) {
   const { data } = await apiFetch(`${BASE}/diffs/${id}/items`, { change_type: changeType });
   return data;

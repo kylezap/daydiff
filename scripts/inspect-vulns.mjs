@@ -4,6 +4,8 @@
  * Run from repo root: node scripts/inspect-vulns.mjs
  */
 import { getDb } from '../src/db/index.mjs';
+import { getModifiedFieldCountsByDiff } from '../src/analysis/queries.mjs';
+import { getDiffItemsPaginated } from '../src/db/queries.mjs';
 
 const db = getDb();
 
@@ -67,7 +69,59 @@ if (withRemoved.length > 0) {
   }
 }
 
-// 5) Today's date and latest snapshot date
+// 5) Modification patterns: which fields change most, and sample value changes
+const withModified = diffs.filter(d => d.modified_count > 0);
+if (withModified.length > 0) {
+  console.log('\n=== MODIFICATION PATTERNS (fields that change most per diff) ===');
+  for (const d of withModified) {
+    const fieldCounts = getModifiedFieldCountsByDiff(d.id);
+    console.log(`\n--- ${d.dataset_name}  ${d.from_date} -> ${d.to_date} (modified: ${d.modified_count}) ---`);
+    if (fieldCounts.length === 0) {
+      console.log('  (no changed_fields in DB for this diff)');
+    } else {
+      fieldCounts.slice(0, 25).forEach(({ field_name, change_count }) => {
+        console.log(`  ${field_name}: ${change_count} rows`);
+      });
+      if (fieldCounts.length > 25) console.log(`  ... and ${fieldCounts.length - 25} more fields`);
+    }
+  }
+
+  // Sample a few modified rows from the diff with the most modifications to see value patterns
+  const topModified = withModified.slice(0, 2);
+  console.log('\n=== Sample MODIFIED row value changes (what actually changed) ===');
+  const SAMPLE_MODIFIED = 5;
+  for (const d of topModified) {
+    const { rows } = getDiffItemsPaginated(d.id, { changeType: 'modified', limit: SAMPLE_MODIFIED, offset: 0 });
+    if (rows.length === 0) continue;
+    console.log(`\n--- ${d.dataset_name}  ${d.from_date} -> ${d.to_date} (first ${rows.length} modified) ---`);
+    for (const item of rows) {
+      const fields = item.changed_fields ? (typeof item.changed_fields === 'string' ? JSON.parse(item.changed_fields) : item.changed_fields) : [];
+      let changeSummary = '';
+      if (item.field_changes && fields.length > 0) {
+        let fc;
+        try {
+          fc = typeof item.field_changes === 'string' ? JSON.parse(item.field_changes) : item.field_changes;
+        } catch {
+          fc = {};
+        }
+        const parts = fields.slice(0, 8).map((f) => {
+          const c = fc[f];
+          if (!c) return null;
+          const oldStr = c.old != null ? String(c.old).slice(0, 40) : 'null';
+          const newStr = c.new != null ? String(c.new).slice(0, 40) : 'null';
+          return `${f}: ${oldStr} → ${newStr}`;
+        }).filter(Boolean);
+        changeSummary = parts.join(' | ');
+      }
+      console.log(`  row_key: ${item.row_key}`);
+      console.log(`  changed_fields: [${fields.join(', ')}]`);
+      if (changeSummary) console.log(`  ${changeSummary}`);
+      console.log('');
+    }
+  }
+}
+
+// 6) Today's date and latest snapshot date
 const today = db.prepare("SELECT date('now') AS d").get();
 const latest = db.prepare(`
   SELECT fetched_date FROM snapshots WHERE dataset_id IN (SELECT id FROM datasets WHERE category = 'vulnerability')

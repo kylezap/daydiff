@@ -12,6 +12,8 @@ import {
   getDiffItemsPaginated,
   insertExecutiveReport,
 } from '../db/queries.mjs';
+import { getModifiedFieldCountsByDiff } from '../analysis/queries.mjs';
+import { getNestedPathPatterns, getAddedRemovedPatterns } from './patternAnalysis.mjs';
 import config from '../../config/default.mjs';
 import { log } from '../lib/logger.mjs';
 
@@ -123,6 +125,17 @@ function buildPayload(date) {
       };
       if (totalChanges > 0) {
         entry.samples = sampleDiffItems(s.diff_id, MAX_SAMPLE);
+        entry.modified_field_patterns = getModifiedFieldCountsByDiff(s.diff_id);
+        const nestedPatterns = getNestedPathPatterns(s.diff_id, s.modified_count);
+        if (nestedPatterns.length > 0) {
+          entry.modified_nested_patterns = nestedPatterns;
+        }
+        if (s.added_count > 0) {
+          entry.added_patterns = getAddedRemovedPatterns(s.diff_id, 'added');
+        }
+        if (s.removed_count > 0) {
+          entry.removed_patterns = getAddedRemovedPatterns(s.diff_id, 'removed');
+        }
       }
       payload[category].push(entry);
     }
@@ -131,10 +144,19 @@ function buildPayload(date) {
   return payload;
 }
 
-const SYSTEM_PROMPT = `You are an executive summarizer for a daily data-diff report. Given JSON data describing adds, removes, and modifications to platform resources (applications, components, repositories, etc.) and vulnerability data, produce a concise markdown report (2–4 paragraphs) that highlights the most significant changes, along with any patterns or trends that are worth noting.
+const SYSTEM_PROMPT = `You are an executive summarizer for a daily data-diff report. Given JSON data describing adds, removes, and modifications to platform resources (applications, components, repositories, etc.) and vulnerability data, produce a concise markdown report that highlights the most significant changes and any patterns or trends.
 
-Use clear section headers: ## Platform Changes and ## Vulnerability Changes.
-Focus on what changed and why it might matter to an executive audience. Be specific when sample data is provided (e.g., name specific repositories or applications that changed). If a category has no changes, say so briefly.`;
+Structure your report as follows:
+- Use clear section headers: ## Platform Changes and ## Vulnerability Changes.
+- Within each section, summarize **each dataset separately** (e.g. Applications, Components, Resources, Repositories, and each vulnerability dataset). For each dataset, state what changed: added, removed, and modified counts, and any patterns.
+
+Use the following data when present:
+- **modified_field_patterns**: Lists which top-level fields changed most often in modified rows. Call out the fields that dominate (e.g. "most modifications touched field X").
+- **modified_nested_patterns**: When present, these are nested paths inside JSON-shaped fields (e.g. providerSpecificDetails.cpu) that changed. Note when changes are concentrated in nested JSON fields.
+- **added_patterns** and **removed_patterns**: When present, use keys_present to note which attributes are common across added/removed rows. Use value_distribution (e.g. status, severity, criticality) to highlight trends such as "most added vulns are CRITICAL" or "removed rows were mostly status X".
+- **samples**: Use specific names (repositories, applications, etc.) when mentioning examples.
+
+Focus on what changed and why it might matter to an executive audience. If a category or dataset has no changes, say so briefly.`;
 
 /**
  * Generate the executive report for a given date and persist it.

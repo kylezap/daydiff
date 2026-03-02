@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DiffGrid from '../components/DiffGrid.jsx';
 import DiffDrawer from '../components/DiffDrawer.jsx';
+import DiffFieldChangeChart from '../components/DiffFieldChangeChart.jsx';
 import FilterBar from '../components/FilterBar.jsx';
 import DatePicker from '../components/DatePicker.jsx';
 import {
@@ -198,6 +199,16 @@ export default function DiffDetail({ category, basePath = '/platform' }) {
           <span style={{ color: '#8b949e', marginLeft: 'auto' }}>
             {gridTotal.toLocaleString()} matching items
           </span>
+        </div>
+      )}
+
+      {/* Field change breakdown (when there are modified rows) */}
+      {diff?.modified_count > 0 && selectedDiffId && (
+        <div style={{ marginBottom: '1rem' }}>
+          <h3 style={{ color: '#e1e4e8', fontSize: '1rem', marginBottom: '0.5rem', fontWeight: 600 }}>
+            Field change breakdown
+          </h3>
+          <DiffFieldChangeChart diffId={selectedDiffId} />
         </div>
       )}
 

@@ -10,6 +10,7 @@ import {
   getUnchangedCount,
   insertDiff,
 } from '../db/queries.mjs';
+import { computeAndStoreFieldChangeCounts } from './fieldCounts.mjs';
 
 /**
  * Get today's date as YYYY-MM-DD.
@@ -205,6 +206,10 @@ function diffDataset(datasetConfig, date) {
     summary,
     items
   );
+
+  if (summary.modified > 0) {
+    computeAndStoreFieldChangeCounts(diffId, summary.modified);
+  }
 
   log(
     `[diff] ${name}: +${summary.added} added, -${summary.removed} removed, ` +

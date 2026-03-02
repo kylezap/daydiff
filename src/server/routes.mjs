@@ -7,6 +7,7 @@ import {
   getDiffItemsPaginated,
   getDiffItemIds,
   getDiffItemsByIds,
+  getDiffFieldChangeCounts,
   getSummaryForDate,
   getTrend,
   getAvailableDates,
@@ -85,6 +86,24 @@ export function setupRoutes(app) {
         return res.status(404).json({ error: 'Diff not found' });
       }
       res.json({ data: diff });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /api/diffs/:id/field-changes ─────────────────────────────
+  // Pre-computed field/path change counts (top-level and nested) for the diff.
+  app.get('/api/diffs/:id/field-changes', (req, res) => {
+    try {
+      const diffId = parseInt(req.params.id, 10);
+      const diff = getDiff(diffId);
+      if (!diff) {
+        return res.status(404).json({ error: 'Diff not found' });
+      }
+      const rows = getDiffFieldChangeCounts(diffId);
+      const topLevel = rows.filter((r) => !r.field_path.includes('.'));
+      const nested = rows.filter((r) => r.field_path.includes('.'));
+      res.json({ data: { topLevel, nested } });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

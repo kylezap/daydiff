@@ -329,6 +329,7 @@ export function insertDiff(datasetId, fromDate, toDate, summary, items) {
     ).get(datasetId, fromDate, toDate);
 
     if (existing) {
+      db.prepare('DELETE FROM diff_field_change_counts WHERE diff_id = ?').run(existing.id);
       db.prepare('DELETE FROM diff_items WHERE diff_id = ?').run(existing.id);
       db.prepare('DELETE FROM diffs WHERE id = ?').run(existing.id);
     }
@@ -363,6 +364,38 @@ export function insertDiff(datasetId, fromDate, toDate, summary, items) {
   });
 
   return run();
+}
+
+/**
+ * Get all field/path change counts for a diff (for API and dashboard).
+ * @param {number} diffId
+ * @returns {Array<{field_path: string, change_count: number}>}
+ */
+export function getDiffFieldChangeCounts(diffId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT field_path, change_count
+    FROM diff_field_change_counts
+    WHERE diff_id = ?
+    ORDER BY change_count DESC
+  `).all(diffId);
+}
+
+/**
+ * Bulk insert field change counts for a diff (top-level and nested paths).
+ * @param {number} diffId
+ * @param {Array<{field_path: string, change_count: number}>} rows
+ */
+export function insertDiffFieldChangeCounts(diffId, rows) {
+  if (!rows || rows.length === 0) return;
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO diff_field_change_counts (diff_id, field_path, change_count)
+    VALUES (?, ?, ?)
+  `);
+  for (const { field_path, change_count } of rows) {
+    stmt.run(diffId, field_path, change_count);
+  }
 }
 
 // ─── Dashboard API Queries ───────────────────────────────────────
