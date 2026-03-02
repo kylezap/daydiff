@@ -310,7 +310,8 @@ export async function fetchAllDatasets(date, datasetNames = null) {
   }
 
   log(`\n[fetch] Starting fetch for ${fetchDate}`);
-  log(`[fetch] ${datasets.length} dataset(s): ${platformDs.length} platform (parallel), ${vulnDs.length} vulnerability (sequential)\n`);
+  const totalRequested = platformDs.length + vulnDs.length;
+  log(`[fetch] ${totalRequested} dataset(s): ${platformDs.length} platform (parallel), ${vulnDs.length} vulnerability (sequential)\n`);
 
   // ── Phase 1: Platform datasets in parallel (small, fast) ──────
   log('[fetch] Phase 1: Platform datasets...');
@@ -328,7 +329,6 @@ export async function fetchAllDatasets(date, datasetNames = null) {
 
   const results = [...platformResults, ...vulnResults];
   const successCount = results.filter(r => !r.error).length;
-  const totalRequested = platformDs.length + vulnDs.length;
   log(`\n[fetch] Complete: ${successCount}/${totalRequested} datasets fetched successfully`);
 
   return results;
