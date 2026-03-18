@@ -17,8 +17,39 @@ async function apiFetch(path, params = {}, options = {}) {
     }
   }
 
-  const fetchOpts = options.signal ? { signal: options.signal } : {};
-  const res = await fetch(url.toString(), fetchOpts);
+  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : null;
+  const ac = new AbortController();
+  let timeoutId = null;
+  let externalAbortHandler = null;
+  const hasExternalSignal = !!options.signal;
+  if (hasExternalSignal) {
+    if (options.signal.aborted) {
+      ac.abort(options.signal.reason);
+    } else {
+      externalAbortHandler = () => ac.abort(options.signal.reason);
+      options.signal.addEventListener('abort', externalAbortHandler, { once: true });
+    }
+  }
+  if (timeoutMs) {
+    const timeoutReason = new DOMException(`Request timed out after ${timeoutMs}ms`, 'TimeoutError');
+    timeoutId = setTimeout(() => ac.abort(timeoutReason), timeoutMs);
+  }
+
+  let res;
+  try {
+    res = await fetch(url.toString(), { signal: ac.signal });
+  } catch (err) {
+    if (ac.signal.aborted && ac.signal.reason?.name === 'TimeoutError') {
+      throw new Error(ac.signal.reason.message);
+    }
+    throw err;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (hasExternalSignal && externalAbortHandler) {
+      options.signal.removeEventListener('abort', externalAbortHandler);
+    }
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `API error: ${res.status}`);
@@ -134,8 +165,28 @@ export async function fetchTrend(days, datasetId, category, options = {}) {
 
 // ─── Quality / Data-Quality Endpoints ─────────────────────────
 
-export async function fetchPopulation(days, datasetId, category) {
-  const { data } = await apiFetch(`${BASE}/population`, { days, dataset_id: datasetId, category });
+/**
+ * Fetch all quality data in one request (assertions, summary, population, flapping,
+ * fieldStability, sourceSegments, referential). Use instead of 7 separate calls.
+ */
+export async function fetchQualityAll(params = {}, options = {}) {
+  const { date, dataset_id, days, category } = params;
+  const search = new URLSearchParams();
+  if (date != null && date !== '') search.set('date', date);
+  if (dataset_id != null && dataset_id !== '') search.set('dataset_id', dataset_id);
+  if (days != null && days !== '') search.set('days', String(days));
+  if (category != null && category !== '') search.set('category', category);
+  const path = `${BASE}/quality/all${search.toString() ? `?${search}` : ''}`;
+  const reqOpts = {
+    ...options,
+    timeoutMs: options.timeoutMs ?? 20000,
+  };
+  const { data } = await apiFetch(path, {}, reqOpts);
+  return data;
+}
+
+export async function fetchPopulation(days, datasetId, category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/population`, { days, dataset_id: datasetId, category }, options);
   return data;
 }
 
@@ -144,46 +195,46 @@ export async function fetchVulnerabilityDistribution(date, category, options = {
   return data;
 }
 
-export async function fetchFlapping(datasetId, days, category) {
-  const { data } = await apiFetch(`${BASE}/quality/flapping`, { dataset_id: datasetId, days, category });
+export async function fetchFlapping(datasetId, days, category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/quality/flapping`, { dataset_id: datasetId, days, category }, options);
   return data;
 }
 
-export async function fetchFieldStability(datasetId, days, category) {
-  const { data } = await apiFetch(`${BASE}/quality/field-stability`, { dataset_id: datasetId, days, category });
+export async function fetchFieldStability(datasetId, days, category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/quality/field-stability`, { dataset_id: datasetId, days, category }, options);
   return data;
 }
 
-export async function fetchSourceSegments(datasetId, date, category) {
-  const { data } = await apiFetch(`${BASE}/quality/source-segments`, { dataset_id: datasetId, date, category });
-  return data;
-}
-
-/**
- * @param {string} [date] - Optional YYYY-MM-DD. When omitted, backend returns latest.
- */
-export async function fetchReferential(date) {
-  const params = date != null && date !== '' ? { date } : {};
-  const { data } = await apiFetch(`${BASE}/quality/referential`, params);
+export async function fetchSourceSegments(datasetId, date, category, options = {}) {
+  const { data } = await apiFetch(`${BASE}/quality/source-segments`, { dataset_id: datasetId, date, category }, options);
   return data;
 }
 
 /**
  * @param {string} [date] - Optional YYYY-MM-DD. When omitted, backend returns latest.
  */
-export async function fetchAssertions(date) {
+export async function fetchReferential(date, options = {}) {
   const params = date != null && date !== '' ? { date } : {};
-  const { data } = await apiFetch(`${BASE}/quality/assertions`, params);
+  const { data } = await apiFetch(`${BASE}/quality/referential`, params, options);
   return data;
 }
 
-export async function fetchAssertionHistory(assertionId, days) {
-  const { data } = await apiFetch(`${BASE}/quality/assertions/history`, { assertion_id: assertionId, days });
+/**
+ * @param {string} [date] - Optional YYYY-MM-DD. When omitted, backend returns latest.
+ */
+export async function fetchAssertions(date, options = {}) {
+  const params = date != null && date !== '' ? { date } : {};
+  const { data } = await apiFetch(`${BASE}/quality/assertions`, params, options);
   return data;
 }
 
-export async function fetchAssertionSummary(days) {
-  const { data } = await apiFetch(`${BASE}/quality/assertions/summary`, { days });
+export async function fetchAssertionHistory(assertionId, days, options = {}) {
+  const { data } = await apiFetch(`${BASE}/quality/assertions/history`, { assertion_id: assertionId, days }, options);
+  return data;
+}
+
+export async function fetchAssertionSummary(days, options = {}) {
+  const { data } = await apiFetch(`${BASE}/quality/assertions/summary`, { days }, options);
   return data;
 }
 

@@ -348,6 +348,40 @@ export function setupRoutes(app) {
   // Quality Endpoints
   // ═══════════════════════════════════════════════════════════════
 
+  // ─── GET /api/quality/all ─────────────────────────────────────
+  // Single response with all quality data (avoids 8 round-trips from the Quality page).
+  app.get('/api/quality/all', (req, res) => {
+    try {
+      const { date, dataset_id, days, category } = req.query;
+      const today = date || new Date().toISOString().slice(0, 10);
+      const dsId = dataset_id ? parseInt(dataset_id, 10) : null;
+      const daysNum = days ? parseInt(days, 10) : 30;
+      const cat = category || null;
+      const [assertions, assertionSummary, population, flapping, fieldStability, sourceSegments, referential] = [
+        getAssertionResults(today),
+        getAssertionSummary(daysNum),
+        getPopulationTrend(daysNum, dsId, cat),
+        getFlappingRows(dsId, 7, cat),
+        getFieldStability(dsId, daysNum, cat),
+        getSourceSegments(dsId, today, cat),
+        checkReferentialIntegrity(today),
+      ];
+      res.json({
+        data: {
+          assertions,
+          assertionSummary,
+          population,
+          flapping,
+          fieldStability,
+          sourceSegments,
+          referential,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── GET /api/quality/flapping ────────────────────────────────
   app.get('/api/quality/flapping', (req, res) => {
     try {
