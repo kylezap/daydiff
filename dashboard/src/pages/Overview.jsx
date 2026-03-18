@@ -108,7 +108,9 @@ export default function Overview({ category }) {
     return () => { cancelled = true; ac.abort(); };
   }, [selectedDate, category]);
 
-  // When dataset filter is applied, fetch trend per selected dataset and merge by date
+  // When dataset filter is applied, fetch trend per selected dataset and merge by date.
+  // Cap at 15 to avoid 80+ requests when many datasets are selected (would block 90s+).
+  const maxTrendDatasets = 15;
   useEffect(() => {
     if (selectedDatasetIds.size === 0) {
       setFilteredTrendData([]);
@@ -116,7 +118,7 @@ export default function Overview({ category }) {
     }
     const ac = new AbortController();
     let cancelled = false;
-    const ids = [...selectedDatasetIds];
+    const ids = [...selectedDatasetIds].slice(0, maxTrendDatasets);
     async function loadFilteredTrend() {
       setFilteredTrendLoading(true);
       try {
@@ -483,6 +485,9 @@ export default function Overview({ category }) {
             {hasFilter && (
               <span style={{ color: '#8b949e', fontWeight: 400, fontSize: '0.8rem', marginLeft: '0.5rem' }}>
                 — {filterLabel}
+                {selectedDatasetIds.size > maxTrendDatasets && (
+                  <span style={{ marginLeft: '0.25rem' }}>(trend: first {maxTrendDatasets})</span>
+                )}
               </span>
             )}
           </h3>

@@ -34,20 +34,12 @@ export default function App() {
           <Route path="/vulns/diff" element={<DiffDetail category="vulnerability" basePath="/vulns" />} />
           <Route path="/vulns/diff/:id" element={<DiffDetail category="vulnerability" basePath="/vulns" />} />
 
-          {/* Data Quality (feature-flagged) */}
-          <Route
-            path="/quality"
-            element={
-              config.qualityTabEnabled ? (
-                <Quality />
-              ) : (
-                <Navigate to="/platform" replace />
-              )
-            }
-          />
+          {/* Data Quality (always available) */}
+          <Route path="/quality" element={<Quality />} />
 
-          {/* Executive Report */}
-          <Route path="/report" element={<Report />} />
+          {/* Report slot shows Quality; Executive Report hidden at /report/executive */}
+          <Route path="/report" element={<Quality />} />
+          <Route path="/report/executive" element={<Report />} />
         </Routes>
       </main>
 

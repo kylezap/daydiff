@@ -21,16 +21,9 @@ export default function Sidebar({ qualityTabEnabled = false }) {
         <NavLink to="/vulns/diff" className={linkClass}>Diff Detail</NavLink>
       </div>
 
-      {qualityTabEnabled && (
-        <div className="sidebar-group">
-          <div className="sidebar-label">Data Quality</div>
-          <NavLink to="/quality" end className={linkClass}>Overview</NavLink>
-        </div>
-      )}
-
       <div className="sidebar-group">
         <div className="sidebar-label">Reports</div>
-        <NavLink to="/report" end className={linkClass}>Executive Report</NavLink>
+        <NavLink to="/quality" end className={linkClass}>Data Quality</NavLink>
       </div>
 
       <style>{`

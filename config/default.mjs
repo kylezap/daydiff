@@ -76,7 +76,7 @@ const config = {
 
   // Feature flags (dashboard UI)
   features: {
-    qualityTab: process.env.QUALITY_TAB_ENABLED === 'true',
+    qualityTab: process.env.QUALITY_TAB_ENABLED !== 'false',
   },
 };
 

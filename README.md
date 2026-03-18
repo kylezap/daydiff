@@ -30,7 +30,7 @@ For local development with hot reload (Vite on port 5173, API proxied from port 
 npm run dev
 ```
 
-Then open http://localhost:5173. The frontend proxies `/api` to the backend on port 3000.
+Then open **http://localhost:5173** (not port 3000). The frontend proxies `/api` to the backend on port 3000. If you use a different backend port (e.g. `DASHBOARD_PORT=3001`), set `VITE_API_PROXY=http://127.0.0.1:3001` when running `npm run dev`. If you see no network requests when opening a page, ensure both the Node backend and Vite are running and you opened http://localhost:5173.
 
 ## CLI Commands
 
