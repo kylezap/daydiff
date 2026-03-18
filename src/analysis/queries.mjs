@@ -1,5 +1,8 @@
 import { getDb } from '../db/index.mjs';
 
+const referentialCache = new Map();
+const REFERENTIAL_CACHE_TTL_MS = 5 * 60 * 1000;
+
 // ─── Flapping Detection ──────────────────────────────────────────
 
 /**
@@ -45,7 +48,7 @@ export function getFlappingRows(datasetId = null, windowDays = 7, category = nul
     WHERE ${where}
       AND di.change_type IN ('added', 'removed')
     GROUP BY d.dataset_id, di.row_key
-    HAVING COUNT(DISTINCT di.change_type) = 2
+    HAVING MIN(di.change_type) != MAX(di.change_type)
     ORDER BY flap_count DESC
     LIMIT 200
   `).all(...params);
@@ -193,62 +196,48 @@ export function checkReferentialIntegrity(date = null) {
 
   if (!checkDate) return [];
 
-  // Get all platform snapshot IDs for this date
-  const platformSnaps = db.prepare(`
-    SELECT s.id AS snapshot_id, ds.name AS dataset_name
-    FROM snapshots s
-    JOIN datasets ds ON ds.id = s.dataset_id
-    WHERE s.fetched_date = ? AND ds.category = 'platform'
-  `).all(checkDate);
-
-  if (platformSnaps.length === 0) return [];
-
-  // Collect all platform row_keys into a set
-  const platformKeys = new Set();
-  for (const snap of platformSnaps) {
-    const keys = db.prepare(
-      'SELECT row_key FROM snapshot_rows WHERE snapshot_id = ?'
-    ).all(snap.snapshot_id);
-    for (const k of keys) {
-      platformKeys.add(k.row_key);
-    }
+  const cached = referentialCache.get(checkDate);
+  const now = Date.now();
+  if (cached && now - cached.ts < REFERENTIAL_CACHE_TTL_MS) {
+    return cached.rows;
   }
 
-  // Get vulnerability snapshots for this date
-  const vulnSnaps = db.prepare(`
-    SELECT s.id AS snapshot_id, ds.name AS dataset_name
-    FROM snapshots s
-    JOIN datasets ds ON ds.id = s.dataset_id
-    WHERE s.fetched_date = ? AND ds.category = 'vulnerability'
-  `).all(checkDate);
-
-  if (vulnSnaps.length === 0) return [];
-
-  // Check each vuln snapshot for orphaned vulnerableId references
-  const orphans = [];
-  for (const snap of vulnSnaps) {
-    const vulnIds = db.prepare(`
+  // SQL-only implementation (set-based) to avoid large JS loops and
+  // event-loop blocking on high-volume datasets.
+  const rows = db.prepare(`
+    WITH platform_keys AS (
+      SELECT DISTINCT sr.row_key
+      FROM snapshot_rows sr
+      JOIN snapshots s ON s.id = sr.snapshot_id
+      JOIN datasets ds ON ds.id = s.dataset_id
+      WHERE s.fetched_date = ?
+        AND ds.category = 'platform'
+    ),
+    vuln_ids AS (
       SELECT
-        json_extract(row_data, '$.vulnerableId') AS vulnerable_id,
+        json_extract(sr.row_data, '$.vulnerableId') AS vulnerable_id,
+        ds.name AS dataset_name,
         COUNT(*) AS vuln_count
-      FROM snapshot_rows
-      WHERE snapshot_id = ?
-        AND json_extract(row_data, '$.vulnerableId') IS NOT NULL
-      GROUP BY vulnerable_id
-    `).all(snap.snapshot_id);
+      FROM snapshot_rows sr
+      JOIN snapshots s ON s.id = sr.snapshot_id
+      JOIN datasets ds ON ds.id = s.dataset_id
+      WHERE s.fetched_date = ?
+        AND ds.category = 'vulnerability'
+        AND json_extract(sr.row_data, '$.vulnerableId') IS NOT NULL
+      GROUP BY ds.name, vulnerable_id
+    )
+    SELECT
+      v.vulnerable_id,
+      v.dataset_name,
+      v.vuln_count
+    FROM vuln_ids v
+    LEFT JOIN platform_keys p ON p.row_key = v.vulnerable_id
+    WHERE p.row_key IS NULL
+    ORDER BY v.vuln_count DESC
+  `).all(checkDate, checkDate);
 
-    for (const row of vulnIds) {
-      if (row.vulnerable_id && !platformKeys.has(row.vulnerable_id)) {
-        orphans.push({
-          vulnerable_id: row.vulnerable_id,
-          dataset_name: snap.dataset_name,
-          vuln_count: row.vuln_count,
-        });
-      }
-    }
-  }
-
-  return orphans;
+  referentialCache.set(checkDate, { ts: now, rows });
+  return rows;
 }
 
 // ─── Assertion CRUD ──────────────────────────────────────────────

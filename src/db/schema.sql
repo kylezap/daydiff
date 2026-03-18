@@ -96,8 +96,12 @@ CREATE INDEX IF NOT EXISTS idx_vuln_dist_cache_date ON vuln_distribution_cache(f
 
 CREATE INDEX IF NOT EXISTS idx_diffs_dates ON diffs(to_date, dataset_id);
 CREATE INDEX IF NOT EXISTS idx_diff_items_type ON diff_items(diff_id, change_type);
+CREATE INDEX IF NOT EXISTS idx_diff_items_change_diff_row ON diff_items(change_type, diff_id, row_key);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_key ON snapshot_rows(snapshot_id, row_key);
 CREATE INDEX IF NOT EXISTS idx_snapshot_rows_hash ON snapshot_rows(snapshot_id, row_key, row_hash);
+CREATE INDEX IF NOT EXISTS idx_snapshot_rows_vulnid_expr
+  ON snapshot_rows(snapshot_id, json_extract(row_data, '$.vulnerableId'))
+  WHERE json_extract(row_data, '$.vulnerableId') IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_assertion_date ON assertion_results(checked_date, assertion_id);
 
 -- Pre-computed field/path change counts per diff (populated after each diff run when modified_count > 0).
