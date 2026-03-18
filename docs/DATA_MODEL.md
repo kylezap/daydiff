@@ -12,7 +12,11 @@ DayDiff stores daily snapshots, row-level diffs, and quality metadata in a singl
 - **`executive_reports`**: persisted LLM-generated executive summaries.
 - **`vuln_distribution_cache`**: precomputed vulnerability distributions (e.g. status/criticality) per date and dataset.
 
+Schema source of truth: `src/db/schema.sql` (runtime migrations are in `src/db/index.mjs`).
+
 ## Entity–relationship diagram
+
+The ER diagram shows key fields only (not every timestamp/index/constraint column).
 
 ```mermaid
 erDiagram
@@ -30,6 +34,7 @@ erDiagram
     text    fetched_date
     integer row_count
     integer api_total
+    text    fetch_warnings
   }
 
   snapshot_rows {
@@ -102,7 +107,7 @@ erDiagram
   datasets ||--o{ assertion_results : "checked on"
 
   datasets ||--o{ vuln_distribution_cache : "vuln stats"
-  snapshots ||--o{ vuln_distribution_cache : "per date"
+  snapshots ||--o{ vuln_distribution_cache : "logical per-date relation"
 ```
 
 ## Table descriptions
@@ -116,25 +121,32 @@ erDiagram
   - **`endpoint`**: upstream API path used by the fetcher.
   - **`row_key`**: name of the unique key field in the upstream JSON.
   - **`category`**: grouping (e.g. `platform`, `vulnerability`) used by the dashboard and reports.
+  - **`created_at`**: insertion timestamp.
 
 ### `snapshots` and `snapshot_rows`
 
 - **`snapshots`**: one row per dataset per fetch date, with counts and any fetch warnings.
+  - Uniqueness: `UNIQUE(dataset_id, fetched_date)`.
+  - Includes `api_total`, `fetch_warnings`, and `created_at`.
 - **`snapshot_rows`**: the raw records for a given snapshot:
   - `row_key` matches the logical key for the dataset.
   - `row_data` is the full JSON payload from the source.
   - `row_hash` is used to detect changes between snapshots.
+  - Uniqueness: `UNIQUE(snapshot_id, row_key)`.
 
 ### `diffs`, `diff_items`, and `diff_field_change_counts`
 
 - **`diffs`**: summary of changes between two dates for a dataset (added/removed/modified/unchanged counts).
+  - Uniqueness: `UNIQUE(dataset_id, from_date, to_date)`.
 - **`diff_items`**:
   - One row per changed `row_key` in a diff.
   - `change_type` ∈ `added | removed | modified`.
   - `row_data` holds the current (or last-known) full row.
   - `field_changes`/`changed_fields` track per-field before/after values for modified rows.
+  - Uniqueness: `UNIQUE(diff_id, row_key)`.
 - **`diff_field_change_counts`**:
   - Pre-aggregated counts of how many rows changed for each `field_path`.
+  - Primary key: `(diff_id, field_path)`.
   - Used by the API (`/api/diffs/:id/field-changes`) and the dashboard field-change charts.
 
 ### `assertion_results`
@@ -145,11 +157,12 @@ erDiagram
   - `dataset_id`: which dataset the check applied to (may be `NULL` for global checks).
   - `checked_date`: date the assertion was evaluated.
   - `passed`, `message`, `details`: outcome and context.
+  - `created_at`: insertion timestamp.
 
 ### `executive_reports`
 
 - **Purpose**: persisted LLM-generated markdown summaries per `report_date`.
-- **Notes**: the dashboard and CLI read from this table when showing historical executive reports.
+- **Notes**: `report_date` is unique, and the dashboard/CLI read this table for historical executive reports.
 
 ### `vuln_distribution_cache`
 
@@ -159,4 +172,5 @@ erDiagram
     - **`dimension`**: `criticality` or `status`.
     - **`label`**: the bucket (e.g. `CRITICAL`, `HIGH`, `DETECTED`, `RESOLVED`).
     - **`count`**: number of rows in that bucket.
+  - Primary key: `(fetched_date, dataset_id, dimension, label)`.
 

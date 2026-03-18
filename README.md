@@ -39,6 +39,26 @@ npm start
 npm run status
 ```
 
+## Notebooks
+
+Use notebooks for deeper vulnerability analysis and client-specific trend exploration.
+
+```bash
+# ensure data exists first
+npm start
+
+# python notebook environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r notebooks/requirements.txt
+
+# launch
+jupyter lab
+```
+
+Primary notebook: `notebooks/vulnerability_eda.ipynb`  
+Detailed notebook guidance: `notebooks/README.md`
+
 ## Development
 
 ```bash
@@ -67,6 +87,38 @@ node src/cli.mjs install-schedule
 - `.env`: API auth, proxy, SSL, dashboard port, schedule, feature flags, report settings.
 - `config/datasets.mjs`: dataset endpoints, row keys, category mapping.
 - `config/default.mjs`: runtime defaults and environment mapping.
+
+### Enable/Disable Datasets
+
+Use these controls depending on whether the change is permanent or one-off:
+
+1. One-off run (no config change): fetch only specific datasets.
+
+```bash
+node src/cli.mjs fetch --datasets Portfolios,Applications
+```
+
+2. Persistent platform dataset changes: edit `config/datasets.mjs`.
+   - Enable by adding an object in `platformDatasets`.
+   - Disable by removing/commenting a dataset object.
+
+3. Persistent vulnerability dataset changes: edit `config/assets.mjs`.
+   - Each asset creates one dataset named `vulns-<asset-name>`.
+   - Enable by adding an asset `{ name, vulnerableId }`.
+   - Disable by removing/commenting that asset entry.
+
+After changing dataset config, run:
+
+```bash
+npm start
+```
+
+### Executive Report (On/Off)
+
+Executive report generation runs at the end of `node src/cli.mjs run` / `npm start`.
+
+- Turn **on**: set `OPENAI_API_KEY` in `.env` (optional: set `REPORT_MODEL`).
+- Turn **off**: leave `OPENAI_API_KEY` empty/unset.
 
 ### Schedule Daily Pulls (macOS launchd)
 
@@ -100,6 +152,7 @@ launchctl unload "$HOME/Library/LaunchAgents/com.daydiff.daily.plist"
 - `docs/DATA_MODEL.md`: schema and entity relationships.
 - `docs/RAG.md`: RAG-related notes.
 - `docs/devgrid-pagination-issue.md`: historical pagination context.
+- `notebooks/README.md`: notebook setup and usage guidance.
 
 ## Security
 
