@@ -1,60 +1,108 @@
 # DayDiff
 
-Daily data diff reporter. Fetches datasets from a REST API, stores daily snapshots in SQLite, computes row-level and aggregate diffs, and serves an on-demand browser dashboard.
+DayDiff tracks daily API data changes: it fetches datasets, stores snapshots in SQLite, computes row-level diffs, and serves a local dashboard for analysis and data quality checks.
+
+## DevGrid Customer Success Use Case
+
+DayDiff is designed for Customer Success teams who manage multiple DevGrid clients and need a reliable daily signal of what changed, where risk increased, and what to communicate.
+
+Use DayDiff to:
+
+- Track client-specific dataset movement day over day (added, removed, modified records).
+- Spot data quality issues early (population drops, instability, referential integrity failures).
+- Investigate vulnerability posture changes by client and prioritize follow-up.
+- Export filtered change sets to share concrete evidence in internal reviews or client updates.
+- Build a consistent daily operating rhythm: fetch, diff, review quality, escalate anomalies, and report outcomes.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-cd dashboard && npm install && npm run build && cd ..
+npm install --prefix dashboard
+npm run build:dashboard
 
-# Configure
 cp .env.example .env
-# Edit .env with your API credentials, proxy, and SSL settings
-# Edit config/datasets.mjs to define your datasets
+# edit .env
+# edit config/datasets.mjs
 
-# Fetch today's data and compute diff
 npm start
-
-# View the dashboard
 npm run dashboard
 ```
 
-## Dashboard Development
-
-For local development with hot reload (Vite on port 5173, API proxied from port 3000):
+## Daily Workflow
 
 ```bash
-# From project root — runs backend + Vite dev server together
+# fetch + diff + quality checks (+ report if OPENAI_API_KEY is set)
+npm start
+
+# inspect status
+npm run status
+```
+
+## Development
+
+```bash
+# backend + Vite together
 npm run dev
 ```
 
-Then open **http://localhost:5173** (not port 3000). The frontend proxies `/api` to the backend on port 3000. If you use a different backend port (e.g. `DASHBOARD_PORT=3001`), set `VITE_API_PROXY=http://127.0.0.1:3001` when running `npm run dev`. If you see no network requests when opening a page, ensure both the Node backend and Vite are running and you opened http://localhost:5173.
+Open `http://localhost:5173`. Vite proxies `/api` to the backend (`http://127.0.0.1:3000` by default).  
+If backend port is changed (for example `DASHBOARD_PORT=3001`), run dev with `VITE_API_PROXY=http://127.0.0.1:3001`.
 
 ## CLI Commands
 
 ```bash
-node src/cli.mjs fetch            # Fetch today's datasets
-node src/cli.mjs diff             # Compute diff vs previous day
-node src/cli.mjs run              # Fetch + diff in one step
-node src/cli.mjs dashboard        # Start dashboard on localhost:3000
-node src/cli.mjs status           # Show latest fetch/diff summary
-node src/cli.mjs install-schedule # Install macOS launchd daily job. To unload: launchctl unload "~/Library/LaunchAgents/com.daydiff.daily.plist"
+node src/cli.mjs fetch --datasets Portfolios,Applications
+node src/cli.mjs diff
+node src/cli.mjs run
+node src/cli.mjs status
+node src/cli.mjs dashboard --port 3000
+node src/cli.mjs prune --days 30
+node src/cli.mjs backfill-vuln-distribution --days 30
+node src/cli.mjs install-schedule
 ```
 
 ## Configuration
 
-- **`.env`** — API credentials, proxy settings, SSL config, dashboard port
-- **`config/datasets.mjs`** — Define which API endpoints to fetch, row keys, and field mappings
+- `.env`: API auth, proxy, SSL, dashboard port, schedule, feature flags, report settings.
+- `config/datasets.mjs`: dataset endpoints, row keys, category mapping.
+- `config/default.mjs`: runtime defaults and environment mapping.
 
-## Known Issues / TODO
+### Schedule Daily Pulls (macOS launchd)
 
-_(None at this time. Pagination uses single-pass sequential offset; see `docs/devgrid-pagination-issue.md` for historical context.)_
+1. Set schedule time in `.env` (24-hour clock):
 
-## Security Notes
+```bash
+SCHEDULE_HOUR=6
+SCHEDULE_MINUTE=0
+```
 
-- Dashboard binds only to `127.0.0.1` (localhost)
-- API keys and proxy credentials stay in `.env` (gitignored)
-- Supports custom CA certificates for corporate proxy environments
-- Supports explicit proxy configuration via `HTTPS_PROXY`
+2. Install the daily job:
+
+```bash
+node src/cli.mjs install-schedule
+```
+
+3. Verify it runs by checking current status:
+
+```bash
+node src/cli.mjs status
+```
+
+To remove the schedule later:
+
+```bash
+launchctl unload "$HOME/Library/LaunchAgents/com.daydiff.daily.plist"
+```
+
+## Data Model and Docs
+
+- `docs/DATA_MODEL.md`: schema and entity relationships.
+- `docs/RAG.md`: RAG-related notes.
+- `docs/devgrid-pagination-issue.md`: historical pagination context.
+
+## Security
+
+- Dashboard binds to `127.0.0.1` only.
+- Secrets remain in `.env` (gitignored).
+- Supports explicit proxy config and custom CA certificates.
